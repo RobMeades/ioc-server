@@ -225,7 +225,7 @@ func operateAudioOut(port string, playlistPath string,  oOSDir string) {
     
     // Create an initial (empty) playlist file    
     if !updatePlaylistFile(playlistPath, mediaSequenceNumber) {
-        fmt.Fprintf(os.Stderr, "Unable to create playlist file \"%s\" (%s).\n", playlistPath, err.Error())
+        fmt.Fprintf(os.Stderr, "Unable to create playlist file \"%s\".\n", playlistPath)
         os.Exit(-1)            
     }
 
@@ -308,7 +308,8 @@ func operateAudioOut(port string, playlistPath string,  oOSDir string) {
     fmt.Printf("Starting HTTP server for Chuff requests on port %s.\n", port)
     
     // Start the HTTP server (should block)
-    err = http.ListenAndServeTLS(":" + port, "cert.pem", "privkey.pem", mux)
+    //err = http.ListenAndServeTLS(":" + port, "cert.pem", "privkey.pem", mux)
+    err = http.ListenAndServe(":" + port, mux)
     
     if err != nil {        
         fmt.Fprintf(os.Stderr, "Could not start HTTP server (%s).\n", err.Error())

@@ -49,7 +49,7 @@ var opts struct {
     Required struct {
         In string `positional-arg-name:"input-port" description:"the input port for incoming raw PCM chuffs"`
         Out string `positional-arg-name:"output-port" description:"the output port for HTTP service"`
-        PlaylistPath string `positional-arg-name:"playlistpath" description:"path to the live playlist file (any file extension will be replaced with .m3u8); the playlist file will be created by this program and the audio files will be stored in the same directory as the playlist file.  THe HTML file that serves the playlist file should be placed in this directory."`
+        PlaylistPath string `positional-arg-name:"playlistpath" description:"path to the live playlist file (any file extension will be replaced with .m3u8); the playlist file will be created by this program and the audio files will be stored in the same directory as the playlist file.  The HTML file that serves the playlist file should be placed in this directory."`
     } `positional-args:"true" required:"yes"`
     UseTcp bool `short:"t" long:"tcp" description:"expect a TCP connection rather than a UDP connection"`
     ClearTsDir bool `short:"c" long:"clear" description:"clear the segment files from the live playlist directory before using it"`
