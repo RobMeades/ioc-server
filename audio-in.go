@@ -248,7 +248,7 @@ func handleUrtpDatagram(packet []byte) {
     }    
 }
 
-// Verify that a sequence of byte represents URTP beader
+// Verify that a sequence of byte represents URTP header
 // For details of the format, see the client code (ioc-client)
 func verifyUrtpHeader(header []byte) bool {
     var isHeader bool
