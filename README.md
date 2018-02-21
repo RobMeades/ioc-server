@@ -166,7 +166,7 @@ Grab the `ioc-server` code and build it with:
 
 `go get github.com/RobMeades/ioc-server`
 
-This will fail as the `lame.h` header file is not in the right place copy it from the `libmp3lame` directory to the right place with:
+This will fail as the `lame.h` header file is not in the right place; copy it from the `libmp3lame` directory to the right place with:
 
 `mkdir ~/gocode/src/github.com/RobMeades/ioc-server/lame/lame`
 `cp ~/libmp3lame/include/lame.h ~/gocode/src/github.com/RobMeades/ioc-server/lame/lame/`
@@ -191,9 +191,37 @@ To run the code, do something like:
 - `-r ~/chuffs/audio.pcm` is the (optional) raw 16-bit PCM output file,
 - `-l ~/chuffs/ioc-server.log` will contain the (optional) file for log output from `ioc-server`.
 
+## Boot Setup
+To run the `ioc-server` at boot, create a file called something like `/lib/systemd/system/ioc-server.service` with contents something like:
+
+```
+[Unit]
+Description=IoC server
+After=network-online.target
+
+[Service]
+ExecStart=/home/username/ioc-server 1234 5678 /home/username/chuffs/live/chuffs -c -t -o /home/username/chuffs/oos
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+...where `username` is replaced by you user name on the system, etc.  Note that the `-r` and `-l` options are left out as they could eat your hard disk.
+
+Test this with:
+
+`sudo systemctl start ioc-server`
+
+...using `sudo systemctl status ioc-server` to check that it looks OK and then actually running an end-to-end link with the [ioc-client](https://github.com/RobMeades/ioc-client).  If all looks good, set it to run at boot with:
+
+`sudo systemctl enable ioc-server`
+
+Reboot and check that it starts correctly; if it does not, check what happened with `sudo journalctl -b` and/or `sudo dmesg`.
+
 # Credits
 This repo includes code imported from:
 
 https://github.com/viert/lame
 
-Copyright, and our sincere thanks, remains with the original author(s).
+Copyright, and my sincere thanks, remains with the original author(s).
