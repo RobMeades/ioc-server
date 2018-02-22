@@ -113,13 +113,14 @@ Check that you can get a response from the ftp server by entering:
 
 You should get something like:
 
+```
 Connected to 127.0.0.1.
 220 (vsFTPd 3.0.3)
 Name (127.0.0.1:username):
-
+```
 Type "quit" and press enter to leave ftp.
 
-Then edit `/etc/vsftpd.conf` to disable anonymous FTP (anonymous_enable=NO), allow local users to log in (local_enable=YES) and enable writing (write_enable=YES).   Restart the vsfptd service once more and check that you can log into the FTP server from somewhere else as the user `username`.
+Then edit `/etc/vsftpd.conf` to disable anonymous FTP (`anonymous_enable=NO`), allow local users to log in (`local_enable=YES`) and enable writing (`write_enable=YES`).   Restart the vsfptd service once more and check that you can log into the FTP server from somewhere else as the user `username`.
 
 Set vsftpd to start at boot by entering:
 
