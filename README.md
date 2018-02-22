@@ -35,8 +35,8 @@ sudo apt-get update
 sudo apt-get install build-essential
 ```
 
-## NOIP
-To avoid having to remember the IP address of the machine I added an entry for it to my `no-ip` account then installed the Dynamic Update Client with:
+## DNS Entry
+To avoid having to remember the IP address of the machine I added a DDNS entry for it in my account at www.noip.com.  Then I installed the Dynamic Update Client with:
 
 ```
 mkdir noip
@@ -46,7 +46,7 @@ tar xf noip-duc-linux.tar.gz
 cd noip-2.1.9-1/
 sudo make install
 ```
-You will need to supply your www.noip.com account details and chose the correct DDNS entry to link to the Raspberry Pi.
+You will need to supply your www.noip.com account details and chose the correct DDNS entry to link to the server machine.
 
 Set permissions correctly with:
 
