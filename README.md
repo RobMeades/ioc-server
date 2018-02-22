@@ -1,13 +1,13 @@
 # Introduction
 This repo contains the server side of the Internet of Chuffs, written in Golang.
 
-# Linux Setup
-I spun-up a Linux server (Ubuntu) on Digital Ocean.  This arrives bare with root login so you will need to do some basic configuration to begin with.
+# Linux Set Up
+I spun-up a Linux server (Ubuntu) on [Digital Ocean](https://www.digitalocean.com).  This arrives bare with root login so you will need to do some basic configuration to begin with.
 
-First, if you aren't using a certificate, use PuTTY or some other SSH terminal as your interface to the machine as Digital Ocean doesn't allow copy-paste in it's VNC-based terminal window.
+First, if you aren't using a certificate, use PuTTY or some other SSH terminal as your interface to the machine as Digital Ocean doesn't allow copy-paste in its VNC-based terminal window.
 
 ## Set Up A User
-Next, setup an admin user as follows:
+Next, set up an admin user as follows:
 
 `adduser username`
 
