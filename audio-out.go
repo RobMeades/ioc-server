@@ -176,19 +176,20 @@ func streamHandler(out http.ResponseWriter, in *http.Request) {
         http.ServeFile(out, in, in.URL.Path)
         playlistAccess.Unlock()
         out.Header().Set("Content-Type","application/x-mpegurl")
-        out.Header().Set("Cache-Control","no-cache")
     } else if ext == SEGMENT_EXTENSION {
         // Serve the requested segment
         log.Printf("Serving segment file \"%s\".\n", in.URL.Path)
         http.ServeFile(out, in, in.URL.Path)
         out.Header().Set("Content-Type","audio/mpeg")
-        out.Header().Set("Cache-Control","no-cache")
     } else {
         // Just serve the requested page
         log.Printf("Serving \"%s\".\n", in.URL.Path)
         http.ServeFile(out, in, in.URL.Path)
-        out.Header().Set("Cache-Control","no-cache")
     }
+    // Stop caching
+    out.Header().Set("Cache-Control","no-cache, no-store, must-revalidate")  // HTTP 1.1.
+    out.Header().Set("Pragma", "no-cache")  // HTTP 1.0.
+    out.Header().Set("Expires", "0") // Proxies.
 }
 
 // Empty the MP3 file list, deleting the files as it goes
