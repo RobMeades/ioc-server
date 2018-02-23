@@ -136,7 +136,7 @@ sudo apt-get install git
 ```
 Edit `/etc/profile` and add to it the following lines:
 
-````
+```
 export PATH=$PATH:/usr/local/go/bin
 export GOPATH="/home/username/gocode"
 ```
