@@ -130,17 +130,17 @@ Set vsftpd to start at boot by entering:
 ## Installation
 Install `golang` and `git `with:
 
-`sudo apt-get install golang-go`
+```
+sudo apt-get install golang-go
+sudo apt-get install git
+```
+Edit `/etc/profile` and add to it the following lines:
 
-`sudo apt-get install git`
-
-Edit `/etc/profile` and add to it the following line:
-
-`export PATH=$PATH:/usr/local/go/bin`
-
-Add the `GOPATH` environment variable to your path.  With a home directory `username`, the path would be:
-
-`export GOPATH="/home/username/gocode"`
+````
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH="/home/username/gocode"
+```
+...changing `username` to match your user name on the system.
 
 To protect the server from unauthorised users, make sure you have generated and installed key pairs according to the [instructions for the ioc-client](https://github.com/RobMeades/ioc-client), then edit the file `/etc/ssh/sshd_config` and set `PasswordAuthentication` to `no`, then restart the `ssd` daemon with `sudo systemctl restart sshd`.
 
