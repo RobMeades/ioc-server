@@ -131,6 +131,7 @@ Set vsftpd to start at boot by entering:
 Install `golang` and `git `with:
 
 `sudo apt-get install golang-go`
+
 `sudo apt-get install git`
 
 Edit `/etc/profile` and add to it the following line:
