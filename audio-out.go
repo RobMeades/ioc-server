@@ -161,6 +161,7 @@ func updatePlaylistFile(fileName string, mediaSequenceNumber int) bool {
 // Home page handler
 func homeHandler (out http.ResponseWriter, in *http.Request, newPath string) {
     log.Printf("Home handler was asked for \"%s\", redirecting to \"%s\"...\n", in.URL.Path, newPath)
+    // Stop caching
     http.Redirect(out, in, newPath, http.StatusFound)
 }
 
@@ -187,9 +188,10 @@ func streamHandler(out http.ResponseWriter, in *http.Request) {
         http.ServeFile(out, in, in.URL.Path)
     }
     // Stop caching
-    out.Header().Set("Cache-Control","no-cache, no-store, must-revalidate")  // HTTP 1.1.
-    out.Header().Set("Pragma", "no-cache")  // HTTP 1.0.
-    out.Header().Set("Expires", "0") // Proxies.
+    out.Header().Set("cache-control","no-cache, no-store, must-revalidate, max-age=0")
+    out.Header().Set("expires", "-1")
+    out.Header().Set("expires", "Tue, 01 Jan 1980 1:00:00 GMT")
+    out.Header().Set("pragma", "no-cache")
 }
 
 // Empty the MP3 file list, deleting the files as it goes
