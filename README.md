@@ -175,12 +175,12 @@ This will fail as the `lame.h` header file is not in the right place; copy it fr
 
 ...then run:
 
-`go build github.com/RobMeades/ioc-server`
+`go get github.com/RobMeades/ioc-server`
 
 ## Usage
 To run the code, do something like:
 
-`./ioc-server 1234 5678 ~/chuffs/live/chuffs -c -t -o ~/chuffs/oos -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
+`~/gocode/bin/ioc-server 1234 5678 ~/chuffs/live/chuffs -c -t -o ~/chuffs/oos -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
 
 ...where:
 
@@ -202,7 +202,7 @@ Description=IoC server
 After=network-online.target
 
 [Service]
-ExecStart=/home/username/ioc-server 1234 5678 /home/username/chuffs/live/chuffs -c -t -o /home/username/chuffs/oos
+ExecStart=/home/username/gocode/bin/ioc-server 1234 5678 /home/username/chuffs/live/chuffs -c -t -o /home/username/chuffs/oos
 Restart=on-failure
 RestartSec=3
 
