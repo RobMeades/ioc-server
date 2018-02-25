@@ -126,6 +126,15 @@ Set vsftpd to start at boot by entering:
 
 `sudo systemctl enable vsftpd`
 
+## SSH Configuration
+Most of the SSH stuff is done on the client side but we need a few things on the server side.  Edit `/etc/ssh/sshd_config` and add to it the following:
+
+```
+ClientAliveInterval 30
+ClientAliveCountMax 3
+```
+This will ensure that if the connection to the client drops the server will also drop the connection (otherwise the client will not be able to re-establish).
+
 # ioc-server Application
 ## Installation
 Install `golang` and `git `with:
