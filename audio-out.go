@@ -48,15 +48,9 @@ type Mp3AudioFile struct {
 // Constants
 //--------------------------------------------------------------------
 
-// The age at which an MP3 file should no longer be used
-const MP3_USABLE_AGE time.Duration = time.Minute * 2
-
-// The age at which an MP3 file can be deleted
-const MP3_REMOVABLE_AGE time.Duration = time.Minute * 5
-
 // The lag from the newest point in the playlist to the point
 // where a browser should begin playing from the playlist
-const MAX_PLAY_LAG time.Duration = time.Second * 10
+const MAX_PLAY_LAG time.Duration = time.Second * 5
 
 //--------------------------------------------------------------------
 // Variables
@@ -209,13 +203,18 @@ func clearMp3FileList(mp3Dir string) {
 }
 
 // Start HTTP server for streaming output; this function should never return
-func operateAudioOut(port string, playlistPath string,  oOSDir string) {
+func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uint,
+                    oOSDir string, oosTimeSeconds uint) {
     var channel = make(chan interface{})
     var err error
     var mp3Dir string
     var mediaSequenceNumber int
-    var oOS bool = true
-    streamTicker := time.NewTicker(time.Second * 5)
+    var lastElementLoopRun time.Time
+    var mp3UsableAge time.Duration = time.Second * time.Duration(playlistLengthSeconds)
+    var mp3RemovableAge time.Duration = mp3UsableAge * 2
+    var oosAge time.Duration = time.Second * time.Duration(oosTimeSeconds)
+
+    streamTicker := time.NewTicker(time.Second * 1)
     mux := http.NewServeMux()
     
     MediaControlChannel = channel
@@ -229,7 +228,7 @@ func operateAudioOut(port string, playlistPath string,  oOSDir string) {
     // Create an initial (empty) playlist file    
     if !updatePlaylistFile(playlistPath, mediaSequenceNumber) {
         fmt.Fprintf(os.Stderr, "Unable to create playlist file \"%s\".\n", playlistPath)
-        os.Exit(-1)            
+        os.Exit(-1)
     }
 
     // Timed function to perform operations on the stream
@@ -238,7 +237,8 @@ func operateAudioOut(port string, playlistPath string,  oOSDir string) {
             // Go through the file list and mark old files as unusable, then removable, 
             // and attempt to delete removable files as we go 
             for newElement := mp3FileList.Front(); newElement != nil; newElement = newElement.Next() {
-                if (newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > MP3_USABLE_AGE) {
+                lastElementLoopRun = time.Now()
+                if (newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > mp3UsableAge) {
                     newElement.Value.(*Mp3AudioFile).usable = false;
                     mediaSequenceNumber++;
                     log.Printf ("MP3 file \"%s\", received at %s, no longer usable (time now is %s).\n",
@@ -246,7 +246,7 @@ func operateAudioOut(port string, playlistPath string,  oOSDir string) {
                                 time.Now().String())
                     updatePlaylistFile(playlistPath, mediaSequenceNumber)
                 }                
-                if (!newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > MP3_REMOVABLE_AGE) {
+                if (!newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > mp3RemovableAge) {
                     newElement.Value.(*Mp3AudioFile).removable = true;
                     log.Printf ("MP3 file \"%s\", received at %s, can now been deleted (time now is %s).\n",
                                 newElement.Value.(*Mp3AudioFile).fileName, newElement.Value.(*Mp3AudioFile).timestamp.String(),
@@ -273,8 +273,6 @@ func operateAudioOut(port string, playlistPath string,  oOSDir string) {
                     log.Printf("Adding new MP3 file \"%s\", duration %d millisecond(s), to the FIFO list...\n", message.fileName, int(message.duration / time.Millisecond))
                     mp3FileList.PushBack(message)
                     updatePlaylistFile(playlistPath, mediaSequenceNumber)
-                    oOS = false;
-                    // TODO: when to set this to true?
                 }
             }
         }
@@ -286,7 +284,7 @@ func operateAudioOut(port string, playlistPath string,  oOSDir string) {
     mux.HandleFunc("/", func(out http.ResponseWriter, in *http.Request) {
         if !filterCrossDomainRequest(out, in) {
             addCrossDomainToResponse(out)
-            if oOS && (oOSDir != ""){
+            if ((time.Now().Sub(lastElementLoopRun) > oosAge) && (oOSDir != "")) {
                 homeHandler(out, in, oOSDir)
             } else {
                 homeHandler(out, in, mp3Dir)

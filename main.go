@@ -52,8 +52,10 @@ var opts struct {
         PlaylistPath string `positional-arg-name:"playlistpath" description:"path to the live playlist file (any file extension will be replaced with .m3u8); the playlist file will be created by this program and the audio files will be stored in the same directory as the playlist file.  The HTML file that serves the playlist file should be placed in this directory."`
     } `positional-args:"true" required:"yes"`
     UseTcp bool `short:"t" long:"tcp" description:"expect a TCP connection rather than a UDP connection"`
+    PlaylistLengthSeconds uint `default:"10" short:"p" long:"duration" description:"the maximum duration of the playlist in seconds, should be a multiple of 5"`
     ClearTsDir bool `short:"c" long:"clear" description:"clear the segment files from the live playlist directory before using it"`
     OOSDir string `short:"o" long:"oosdir" description:"the path to a directory containing HTML and, optionally in the same directory, static playlist/audio files, to use when there is no live audio to stream (you must create these files yourself)"`
+    OOSTimeSeconds uint `default:"300" short:"O" long:"oostime" description:"the number of seconds of inactivity after which the out of service HTML is used (only used if -o is specified)"`
     LogName string `short:"l" long:"logfile" description:"file for logging output (will be truncated if it already exists)"`
     RawPcmName string `short:"r" long:"rawpcmfile" description:"file for 16 bit PCM output (will be truncated if it already exists)"`
 }
@@ -129,7 +131,7 @@ func main() {
         go operateAudioIn(opts.Required.In, opts.UseTcp)
         
         // Run the HTTP server for audio output (which should block)
-        operateAudioOut(opts.Required.Out, playlistPath, opts.OOSDir)
+        operateAudioOut(opts.Required.Out, playlistPath, opts.PlaylistLengthSeconds, opts.OOSDir, opts.OOSTimeSeconds)
     } else {
         if (opts.RawPcmName != "") && (rawPcmHandle == nil) {
             fmt.Fprintf(os.Stderr, "Unable to open %s for raw PCM output (%s).\n", opts.RawPcmName, err.Error())
