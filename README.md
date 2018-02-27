@@ -176,7 +176,7 @@ cp ~/libmp3lame/include/lame.h ~/gocode/src/github.com/RobMeades/ioc-server/lame
 ```
 ...then run:
 
-`go get github.com/RobMeades/ioc-server`
+`go get -u github.com/RobMeades/ioc-server`
 
 ## Usage
 To run the code, do something like:
