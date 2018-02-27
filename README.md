@@ -2,9 +2,9 @@
 This repo contains the server side of the Internet of Chuffs, written in Golang.
 
 # Linux Set Up
-I spun-up a Linux server (Ubuntu) on [Digital Ocean](https://www.digitalocean.com).  This arrives bare with root login so you will need to do some basic configuration to begin with.
+I spun-up a Linux server (Ubuntu) on [Digital Ocean](https://www.digitalocean.com).  This arrives bare with root login so you will need to do some basic configuration first.
 
-First, if you aren't using a certificate, use PuTTY or some other SSH terminal as your interface to the machine as Digital Ocean doesn't allow copy-paste in its VNC-based terminal window.
+It is best to use PuTTY or some other SSH terminal as your interface to the machine as [Digital Ocean](https://www.digitalocean.com) doesn't allow copy-paste in its VNC-based terminal window.
 
 ## Set Up A User
 Next, set up an admin user as follows:
@@ -36,7 +36,7 @@ sudo apt-get install build-essential
 ```
 
 ## DNS Entry
-To avoid having to remember the IP address of the machine I added a DDNS entry for it in my account at www.noip.com.  Then I installed the Dynamic Update Client with:
+To avoid having to remember the IP address of the machine I added a DDNS entry for it in my account at www.noip.com.  Then I installed their Dynamic Update Client with:
 
 ```
 mkdir noip
@@ -142,7 +142,7 @@ export GOPATH="/home/username/gocode"
 ```
 ...changing `username` to match your user name on the system.
 
-To protect the server from unauthorised users, make sure you have generated and installed key pairs according to the [instructions for the ioc-client](https://github.com/RobMeades/ioc-client), then edit the file `/etc/ssh/sshd_config` and set `PasswordAuthentication` to `no`, then restart the `ssd` daemon with `sudo systemctl restart sshd`.
+To protect the server from unauthorised users, make sure you have generated and installed key pairs according to the [instructions for the ioc-client](https://github.com/RobMeades/ioc-client).  If you are also ready to SSH in based on certificates rather then user name and password, edit the file `/etc/ssh/sshd_config` and set `PasswordAuthentication` to `no`, then restart the `ssh` daemon with `sudo systemctl restart sshd`; the [Digital Ocean](https://www.digitalocean.com) machines are under constant brute-force attack, usually from IP addresses originating in China, so it is advisable to use certificates.
 
 Make sure that you have Lame installed, with something like:
 
@@ -170,9 +170,10 @@ Grab the `ioc-server` code and build it with:
 
 This will fail as the `lame.h` header file is not in the right place; copy it from the `libmp3lame` directory to the right place with:
 
-`mkdir ~/gocode/src/github.com/RobMeades/ioc-server/lame/lame`
-`cp ~/libmp3lame/include/lame.h ~/gocode/src/github.com/RobMeades/ioc-server/lame/lame/`
-
+```
+mkdir ~/gocode/src/github.com/RobMeades/ioc-server/lame/lame
+cp ~/libmp3lame/include/lame.h ~/gocode/src/github.com/RobMeades/ioc-server/lame/lame/
+```
 ...then run:
 
 `go get github.com/RobMeades/ioc-server`
@@ -180,7 +181,7 @@ This will fail as the `lame.h` header file is not in the right place; copy it fr
 ## Usage
 To run the code, do something like:
 
-`~/gocode/bin/ioc-server 1234 5678 ~/chuffs/live/chuffs -c -t -p 10 -o ~/chuffs/oos -O 300 -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
+`~/gocode/bin/ioc-server 1234 5678 ~/chuffs/live/chuffs -c -t -p 10 -o ~/chuffs/oos -s 300 -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
 
 ...where:
 
@@ -191,7 +192,7 @@ To run the code, do something like:
 - `-t` indicates that a TCP connection is expected (otherwise UDP packets),
 - `-p` indicates the maximum length of the playlist to store in seconds (should be a multiple of 5, defaults to 10),
 - `-o ~/chuffs/oos` optionally gives the directory containing HTML and, if required, in the same directory, static playlist/audio files, to use when there is no live audio to stream (you must create these files yourself),
-- `-O` indicates the number of seconds of inactivity after which to use the out of service HTML (only valid if `-o` is specified, defaults to 300),
+- `-s` indicates the number of seconds of inactivity after which to use the out of service HTML (only valid if `-o` is specified, defaults to 300),
 - `-r ~/chuffs/audio.pcm` is the (optional) raw 16-bit PCM output file,
 - `-l ~/chuffs/ioc-server.log` will contain the (optional) file for log output from `ioc-server`.
 
