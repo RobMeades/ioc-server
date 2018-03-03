@@ -50,7 +50,7 @@ type Mp3AudioFile struct {
 
 // The lag from the newest point in the playlist to the point
 // where a browser should begin playing from the playlist
-const MAX_PLAY_LAG time.Duration = time.Second * 5
+const MAX_PLAY_LAG time.Duration = time.Second * 2
 
 //--------------------------------------------------------------------
 // Variables

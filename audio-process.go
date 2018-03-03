@@ -38,7 +38,7 @@ const NUM_PROCESSED_DATAGRAMS int = 1
 const MAX_GAP_FILL_MILLISECONDS int = 500
 
 // The amount of audio in each MP3 output file
-const MAX_MP3_FILE_DURATION time.Duration = time.Second * 5
+const MAX_MP3_FILE_DURATION time.Duration = time.Second * 1
 
 // The number of samples represented by the MP3 file duration
 const MAX_MP3_FILE_SAMPLES int = int(MAX_MP3_FILE_DURATION / time.Second) * SAMPLING_FREQUENCY
