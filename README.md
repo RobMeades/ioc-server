@@ -84,6 +84,15 @@ Your www.noip.com account should show that the update client has been in contact
 
 ...and by checking once more that your www.noip.com account shows that the update client has been in contact.
 
+## SSHD Configuration
+When setting up SSH connections that listen at the server end (i.e. with the `-R` option) there is a problem where, if the connection is dropped without notice, any subsequent attempt to re-establish the connection will fail as the port is considered to be already in use at the server end.  The only way out is to set a keep-alive with a max count from the server end, so that inactive connections are dropped.  Do this by editing `/etc/ssh/sshd_config` (note that the file is `sshd_config` and NOT `ssh_config`) to add the lines:
+
+```
+ClientAliveInterval 30
+ClientAliveCountMax 2
+```
+...then restart the `ssh` daemon with `sudo systemctl restart sshd`
+
 ## File Transfer
 I also chose to install VSFTP:
 
@@ -190,7 +199,7 @@ To run the code, do something like:
 - `~/chuffs/live/chuffs` is the path to the live playlists file that the `ioc-server` will create (i.e. in this case `chuffs.m3u8` in the `~/chuffs/live` directory),
 - `-c` indicates that old segments files should be deleted from the live playlists directory at start-up,
 - `-t` indicates that a TCP connection is expected (otherwise UDP packets),
-- `-p` indicates the maximum length of the playlist to store in seconds (should be a multiple of 5, defaults to 10),
+- `-p` indicates the maximum length of the playlist to store in seconds (defaults to 10),
 - `-o ~/chuffs/oos` optionally gives the directory containing HTML and, if required, in the same directory, static playlist/audio files, to use when there is no live audio to stream (you must create these files yourself),
 - `-s` indicates the number of seconds of inactivity after which to use the out of service HTML (only valid if `-o` is specified, defaults to 300),
 - `-r ~/chuffs/audio.pcm` is the (optional) raw 16-bit PCM output file,
