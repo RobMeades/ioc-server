@@ -107,15 +107,15 @@ var header bytes.Buffer
 // For details of the format, see the client code (ioc-client)
 func decodePcm(audioDataPcm []byte) *[]int16 {
     audio := make([]int16, len(audioDataPcm) / URTP_SAMPLE_SIZE)
-    
+
     // Just copy in the bytes
     x := 0
     for y := range audio {
         audio[y] = (int16(audioDataPcm[x]) << 8) + int16(audioDataPcm[x + 1])
         x += 2 
     }
-    
-    return &audio    
+
+    return &audio
 }
 
 // Decode UNICAM_COMPRESSED_x_BIT_16000_HZ data from a datagram
@@ -130,19 +130,19 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
     var sample int16
     var sourceIndex int
     var compressedSampleBitShift uint = 0
-    
+
     // Work out how much audio data is present
     for x := 0; x < len(audioDataUnicam) * 8; x += SAMPLES_PER_UNICAM_BLOCK * sampleSizeBits + UNICAM_CODED_SHIFT_SIZE_BITS {
         numBlocks++;
     }
-    
+
     // Allocate space
     audio := make([]int16, numBlocks * SAMPLES_PER_UNICAM_BLOCK)
-    
-    log.Printf("UNICAM: %d byte(s) containing %d block(s), expanding to a total of %d samples(s) of uncompressed audio.\n", len(audioDataUnicam), numBlocks, len(audio))
-    
+
+//    log.Printf("UNICAM: %d byte(s) containing %d block(s), expanding to a total of %d samples(s) of uncompressed audio.\n", len(audioDataUnicam), numBlocks, len(audio))
+
     // Decode the blocks
-    for blockCount < numBlocks {        
+    for blockCount < numBlocks {
         // Get the compressed values
         for x := 0; x < SAMPLES_PER_UNICAM_BLOCK; x++ {
             if sampleSizeBits != 8 {
@@ -151,7 +151,7 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
                 sample = int16(((audioDataUnicam[sourceIndex]) & byte((uint(0xFF) >> compressedSampleBitShift)))) << (compressedSampleBitShift + (uint(sampleSizeBits) - 8))
                 //log.Printf("UNICAM block %d:%02d, partial unpacked value %d (0x%x), from initial input value 0x%x.\n", blockCount, x, sample, sample, audioDataUnicam[sourceIndex])
                 sourceIndex++
-                sample |= int16(audioDataUnicam[sourceIndex] >> (8 - (compressedSampleBitShift + uint(sampleSizeBits) - 8)))                    
+                sample |= int16(audioDataUnicam[sourceIndex] >> (8 - (compressedSampleBitShift + uint(sampleSizeBits) - 8)))
                 audio[blockOffset + x] = sample
                 //log.Printf("UNICAM block %d:%02d, unpacked value %d (0x%x) with a bit of the next input value 0x%x.\n", blockCount, x, sample, sample, audioDataUnicam[sourceIndex])
                 compressedSampleBitShift += uint(sampleSizeBits) - 8;
@@ -165,21 +165,21 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
                 sourceIndex++
             }
         }
-        
+
         // Get the shift value
         if (blockCount % 2 == 0) {
             // Even block
-            shiftValues = audioDataUnicam[sourceIndex]            
+            shiftValues = audioDataUnicam[sourceIndex]
             sourceIndex++
             shift = shiftValues >> 4
         } else {
             shift = shiftValues & 0x0F
         }
-        
+
         if shift > peakShift {
             peakShift = shift
         }
-        
+
         //log.Printf("UNICAM block %d, shift value %d.\n", blockCount, shift)
         // Shift the values to uncompress them
         for x := 0; x < SAMPLES_PER_UNICAM_BLOCK; x++ {
@@ -191,68 +191,67 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
                 }
             }
             audio[blockOffset + x] = sample << shift
-            
+
             //log.Printf("UNICAM block %d:%02d, compressed value %d (0x%x) becomes %d (0x%x).\n",
             //           blockCount, x, sample, sample, audio[blockOffset + x], audio[blockOffset + x])
         }
-        
+
         blockOffset += SAMPLES_PER_UNICAM_BLOCK
         blockCount++
     }
-    log.Printf("UNICAM highest shift value was %d.\n", peakShift)
-    
-    return &audio    
+    //log.Printf("UNICAM highest shift value was %d.\n", peakShift)
+    return &audio
 }
 
 // Handle an incoming URTP datagram and send it off for processing
 // For details of the format, see the client code (ioc-client)
 func handleUrtpDatagram(packet []byte) {
-    log.Printf("Packet of size %d byte(s) received.\n", len(packet))
-//    log.Printf("%s\n", hex.Dump(line[:numBytesIn]))
+    //log.Printf("Packet of size %d byte(s) received.\n", len(packet))
+    //log.Printf("%s\n", hex.Dump(line[:numBytesIn]))
     if (len(packet) >= URTP_HEADER_SIZE) {
         // Populate a URTP datagram with the data
         urtpDatagram := new(UrtpDatagram)
-        log.Printf("URTP header:\n")
-        log.Printf("  sync byte:        0x%x.\n", packet[0])
+        //log.Printf("URTP header:\n")
+        //log.Printf("  sync byte:        0x%x.\n", packet[0])
         audioCodingScheme := packet[1]
         urtpDatagram.SequenceNumber = uint16(packet[2]) << 8 + uint16(packet[3])
-        log.Printf("  sequence number:  %d.\n", urtpDatagram.SequenceNumber)
+        //log.Printf("  sequence number:  %d.\n", urtpDatagram.SequenceNumber)
         urtpDatagram.Timestamp = (uint64(packet[4]) << 56) + (uint64(packet[5]) << 48) + (uint64(packet[6]) << 40) + (uint64(packet[7]) << 32) +
                                  (uint64(packet[8]) << 24) + (uint64(packet[9]) << 16) + (uint64(packet[10]) << 8) + uint64(packet[11])
-        log.Printf("  timestamp:        %6.3f ms.\n", float64(urtpDatagram.Timestamp) / 1000)
-        
+        //log.Printf("  timestamp:        %6.3f ms.\n", float64(urtpDatagram.Timestamp) / 1000)
+
         if (len(packet) > URTP_HEADER_SIZE) {
             switch (audioCodingScheme) {
                 case PCM_SIGNED_16_BIT:
-                    log.Printf("  audio coding:     PCM_SIGNED_16_BIT.\n")
+                    //log.Printf("  audio coding:     PCM_SIGNED_16_BIT.\n")
                     urtpDatagram.Audio = decodePcm(packet[URTP_HEADER_SIZE:])
                 case UNICAM_COMPRESSED_8_BIT:
-                    log.Printf("  audio coding:     UNICAM_COMPRESSED_8_BIT.\n")
+                    //log.Printf("  audio coding:     UNICAM_COMPRESSED_8_BIT.\n")
                     urtpDatagram.Audio = decodeUnicam(packet[URTP_HEADER_SIZE:], 8)
                 case UNICAM_COMPRESSED_10_BIT:
-                    log.Printf("  audio coding:     UNICAM_COMPRESSED_10_BIT.\n")
+                    //log.Printf("  audio coding:     UNICAM_COMPRESSED_10_BIT.\n")
                     urtpDatagram.Audio = decodeUnicam(packet[URTP_HEADER_SIZE:], 10)
                 default:
-                    log.Printf("  audio coding:     !unknown!\n")
+                    //log.Printf("  audio coding:     !unknown!\n")
             }
         }
-        
+
         if urtpDatagram.Audio != nil {
-            log.Printf("URTP sample(s) %d\n", len(*urtpDatagram.Audio))
+            //log.Printf("URTP sample(s) %d\n", len(*urtpDatagram.Audio))
         } else {
-            log.Printf("Unable to decode audio samples from this datagram.\n")
+            //log.Printf("Unable to decode audio samples from this datagram.\n")
         }
-        
+
         // Send the data to the processing channel
         ProcessDatagramsChannel <- urtpDatagram
-    }    
+    }
 }
 
 // Verify that a sequence of byte represents URTP header
 // For details of the format, see the client code (ioc-client)
 func verifyUrtpHeader(header []byte) bool {
     var isHeader bool
-    
+
     if len(header) >= URTP_HEADER_SIZE {
         if header[0] == SYNC_BYTE {
             if header[1] < MAX_NUM_AUDIO_CODING_SCHEMES {
@@ -272,7 +271,7 @@ func verifyUrtpHeader(header []byte) bool {
     } else {
         log.Printf("NOT a URTP header %x (must be at least %d bytes long).\n", header, URTP_HEADER_SIZE)
     }
-    
+
     return isHeader
 }
 
@@ -281,11 +280,11 @@ func verifyUrtpHeader(header []byte) bool {
 func handleUrtpStream(data []byte) {
     var err error
     var item byte
-    
+
     // Write all the data to the TCP buffer
     tcpBuffer.Write(data)
-    
-    log.Printf("TCP reassembly: %d byte(s) received.\n", len(data))
+
+    //log.Printf("TCP reassembly: %d byte(s) received.\n", len(data))
     for item, err = tcpBuffer.ReadByte(); err == nil; item, err = tcpBuffer.ReadByte() {
         //log.Printf("TCP reassembly: state %d, byte %d (0x%x).\n", urtpReassemblyState, item, item)
         switch (urtpReassemblyState) {
@@ -342,11 +341,11 @@ func handleUrtpStream(data []byte) {
                         urtpDatagram.Write(header.Bytes())
                         if urtpPayloadSize == 0 {
                             header.Reset()
-                            urtpReassemblyState = URTP_STATE_WAITING_SYNC                
+                            urtpReassemblyState = URTP_STATE_WAITING_SYNC
                         }
                     } else {
-                        log.Printf("TCP reassembly: NOT a URTP header, payload length %d (0x%x, in the last two bytes) is larger than the maximum number of payload bytes (%d)).\n",
-                                   urtpPayloadSize, urtpPayloadSize, URTP_DATAGRAM_MAX_SIZE)
+                        //log.Printf("TCP reassembly: NOT a URTP header, payload length %d (0x%x, in the last two bytes) is larger than the maximum number of payload bytes (%d)).\n",
+                        //           urtpPayloadSize, urtpPayloadSize, URTP_DATAGRAM_MAX_SIZE)
                         urtpPayloadSize = 0
                         header.Reset()
                         urtpReassemblyState = URTP_STATE_WAITING_SYNC
@@ -367,10 +366,10 @@ func handleUrtpStream(data []byte) {
                 urtpPayloadSize -= bytesToRead
                 if urtpPayloadSize == 0 {
                     // Got the lot, handle the complete datagram now and reset the state machine
-                    log.Printf("TCP reassembly: URTP packet (%d bytes) fully received.\n", urtpDatagram.Len())
+                    //log.Printf("TCP reassembly: URTP packet (%d bytes) fully received.\n", urtpDatagram.Len())
                     handleUrtpDatagram(urtpDatagram.Next(urtpDatagram.Len()))
                     header.Reset()
-                    urtpReassemblyState = URTP_STATE_WAITING_SYNC                
+                    urtpReassemblyState = URTP_STATE_WAITING_SYNC
                 } else {
                     //log.Printf("TCP reassembly: %d byte(s) of payload remaining to be read.\n", urtpPayloadSize)
                 }
@@ -378,7 +377,7 @@ func handleUrtpStream(data []byte) {
                 urtpByteCount = 0
                 urtpPayloadSize = 0
                 header.Reset()
-                urtpReassemblyState = URTP_STATE_WAITING_SYNC                
+                urtpReassemblyState = URTP_STATE_WAITING_SYNC
         }
     }
 }
@@ -411,27 +410,27 @@ func udpServer(port string) {
             if err != nil {
                 fmt.Fprintf(os.Stderr, "Error reading from port %v (%s).\n", localUdpAddr, err.Error())
             } else {
-                fmt.Fprintf(os.Stderr, "UDP read on port %v returned when it should not.\n", localUdpAddr)    
+                fmt.Fprintf(os.Stderr, "UDP read on port %v returned when it should not.\n", localUdpAddr)
             }
         } else {
             fmt.Fprintf(os.Stderr, "Couldn't start UDP server on port %s (%s).\n", port, err.Error())
-        }            
+        }
     } else {
         fmt.Fprintf(os.Stderr, "'%s' is not a valid UDP address (%s).\n", port, err.Error())
-    }    
+    }
 }
 
 // Run a TCP server forever
 func tcpServer(port string) {
     var newServer net.Conn
     var currentServer net.Conn
-    
+
     listener, err := net.Listen("tcp", ":" + port)
     if err == nil {
         defer listener.Close()
         // Listen for a connection
         for {
-            fmt.Printf("TCP server waiting for a [further] Chuff connection on port %s.\n", port)    
+            fmt.Printf("TCP server waiting for a [further] Chuff connection on port %s.\n", port)
             newServer, err = listener.Accept()
             if err == nil {
                 if currentServer != nil {
@@ -455,23 +454,23 @@ func tcpServer(port string) {
                 fmt.Printf("Connection made by %s.\n", currentServer.RemoteAddr().String())
                 go func(server net.Conn) {
                     // Read packets until the connection is closed under us
-                    line := make([]byte, URTP_DATAGRAM_MAX_SIZE)                
+                    line := make([]byte, URTP_DATAGRAM_MAX_SIZE)
                     for numBytesIn, err := server.Read(line); (err == nil) && (numBytesIn > 0); numBytesIn, err = server.Read(line) {
                         handleUrtpStream(line[:numBytesIn])
                     }
                     fmt.Printf("[Connection to %s closed].\n", server.RemoteAddr().String())
                 }(currentServer)
             } else {
-                fmt.Fprintf(os.Stderr, "Error accepting connection (%s).\n", err.Error())        
+                fmt.Fprintf(os.Stderr, "Error accepting connection (%s).\n", err.Error())
             }
         }
     } else {
-        fmt.Fprintf(os.Stderr, "Unable to listen for TCP connections on port %s (%s).\n", port, err.Error())        
+        fmt.Fprintf(os.Stderr, "Unable to listen for TCP connections on port %s (%s).\n", port, err.Error())
     }
 }
 
 // Run the server that receives the audio of Chuffs; this function should never return
-func operateAudioIn(port string, useTCP bool) {    
+func operateAudioIn(port string, useTCP bool) {
     if useTCP {
         tcpServer(port)
     } else {

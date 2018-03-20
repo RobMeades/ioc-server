@@ -110,7 +110,7 @@ func openMp3File(dirName string) *os.File {
     } else {
         log.Printf("Unable to create segment file for MP3 output in directory \"%s\".\n", dirName)
     }
-    
+
     return handle
 }
 
@@ -138,7 +138,7 @@ func createMp3Writer(mp3Audio *bytes.Buffer) (*lame.LameWriter, int) {
         if mp3Writer.Encoder.InitParams() >= 0 {
             mp3SamplesPerFrame = mp3Writer.Encoder.GetMp3FrameSize()
             log.Printf("Created MP3 writer, MP3 frame size is %d samples, encoder delay is %d samples.\n",
-                       mp3SamplesPerFrame, mp3Writer.Encoder.GetEncoderDelay())        
+                       mp3SamplesPerFrame, mp3Writer.Encoder.GetEncoderDelay())
         } else {
             mp3Writer.Close()
             mp3Writer = nil
@@ -147,7 +147,7 @@ func createMp3Writer(mp3Audio *bytes.Buffer) (*lame.LameWriter, int) {
     } else {
         log.Printf("Unable to instantiate MP3 writer.\n")
     }
-    
+
     return mp3Writer, mp3SamplesPerFrame
 }
 
@@ -155,7 +155,7 @@ func createMp3Writer(mp3Audio *bytes.Buffer) (*lame.LameWriter, int) {
 func handleGap(gap int, previousDatagram * UrtpDatagram) {
     var y int
     fill := make([]byte, gap * URTP_SAMPLE_SIZE)
-    
+
     log.Printf("Handling a gap of %d samples...\n", gap)
     if gap < SAMPLING_FREQUENCY * MAX_GAP_FILL_MILLISECONDS / 1000 {
         // TODO: for now just repeat the last sample we received
@@ -169,7 +169,7 @@ func handleGap(gap int, previousDatagram * UrtpDatagram) {
                 if y >= len(*previousDatagram.Audio) {
                     y = 0
                 }
-            } 
+            }
         }
         log.Printf("Writing %d bytes to the audio buffer...\n", len(fill))
         pcmAudio.Write(fill)
@@ -180,39 +180,39 @@ func handleGap(gap int, previousDatagram * UrtpDatagram) {
 
 // Process a URTP datagram
 func processDatagram(datagram * UrtpDatagram, savedDatagramList * list.List) {
-    
+
     var previousDatagram *UrtpDatagram
-    
+
     if savedDatagramList.Front() != nil {
         previousDatagram = savedDatagramList.Front().Value.(*UrtpDatagram)
     }
-    
-    log.Printf("Processing a datagram...\n")
-    
+
+    //log.Printf("Processing a datagram...\n")
+
     // Handle the case where we have missed some datagrams
     if (previousDatagram != nil) && (datagram.SequenceNumber != previousDatagram.SequenceNumber + 1) {
         log.Printf("Sequence number skip (expected %d, received %d).\n", previousDatagram.SequenceNumber + 1, datagram.SequenceNumber)
         handleGap(int(datagram.SequenceNumber - previousDatagram.SequenceNumber) * SAMPLES_PER_BLOCK, previousDatagram)
     }
-        
-        // Copy the received audio into the buffer    
+
+        // Copy the received audio into the buffer
     if datagram.Audio != nil {
         audioBytes := make([]byte, len(*datagram.Audio) * URTP_SAMPLE_SIZE)
         for x, y := range *datagram.Audio {
             for z := 0; z < URTP_SAMPLE_SIZE; z++ {
                 audioBytes[(x * URTP_SAMPLE_SIZE) + z] = byte(y >> ((uint(z) * 8)))
-            } 
+            }
         }
-        log.Printf("Writing %d bytes to the audio buffer...\n", len(audioBytes))
+        //log.Printf("Writing %d bytes to the audio buffer...\n", len(audioBytes))
         pcmAudio.Write(audioBytes)
-        
+
         // If the block is shorter than expected, handle that gap too
         if len(*datagram.Audio) < SAMPLES_PER_BLOCK {
-            handleGap(SAMPLES_PER_BLOCK - len(*datagram.Audio), previousDatagram)        
+            handleGap(SAMPLES_PER_BLOCK - len(*datagram.Audio), previousDatagram)
         }
     } else {
         // And if the audio is entirely missing, handle that
-        handleGap(SAMPLES_PER_BLOCK, previousDatagram)        
+        handleGap(SAMPLES_PER_BLOCK, previousDatagram)
     }
 }
 
@@ -222,10 +222,10 @@ func encodeOutput (mp3Writer *lame.LameWriter, pcmHandle *os.File, numSamples in
     var bytesRead int
     var bytesEncoded int
     buffer := make([]byte, numSamples * URTP_SAMPLE_SIZE)
-    
+
     bytesRead, err = pcmAudio.Read(buffer)
     if bytesRead > 0 {
-        log.Printf("Encoding %d byte(s) into the output...\n", bytesRead)
+        //log.Printf("Encoding %d byte(s) into the output...\n", bytesRead)
         if mp3Writer != nil {
             bytesEncoded, err = mp3Writer.Write(buffer[:bytesRead])
             if err != nil {
@@ -239,7 +239,7 @@ func encodeOutput (mp3Writer *lame.LameWriter, pcmHandle *os.File, numSamples in
             }
         }
     }
-    
+
     return bytesEncoded / URTP_SAMPLE_SIZE
 }
 
@@ -248,7 +248,7 @@ func encodeOutput (mp3Writer *lame.LameWriter, pcmHandle *os.File, numSamples in
 func writeTag(mp3Handle *os.File, offset time.Duration) error {
     var timestampBytes bytes.Buffer
     var timestampUint64 uint64 // Must be an uint64 to produce the correct sized timestamp
-    
+
     // First, write the prefix
     _, err := mp3Handle.WriteString(id3Prefix)
     if err == nil {
@@ -262,11 +262,11 @@ func writeTag(mp3Handle *os.File, offset time.Duration) error {
         } else {
             log.Printf("Error creating timestamp offset (%s).\n", err.Error())
         }
-        
+
         log.Printf("Writing %d byte timestamp inside MP3 file (0x%x)...\n", timestampBytes.Len(), &timestampBytes)
         _, err = timestampBytes.WriteTo(mp3Handle)
     }
-    
+
     return err
 }
 
@@ -283,9 +283,9 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
     var mp3Offset time.Duration
     var channel = make(chan interface{})
     processTicker := time.NewTicker(time.Duration(BLOCK_DURATION_MS) * time.Millisecond)
-    
+
     ProcessDatagramsChannel = channel
-    
+
     // Initialise the linked list of datagrams
     newDatagramList.Init()
 
@@ -297,26 +297,26 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
     }
     // Encode an exact number of MP3 frames
     mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame
-    
+
     // Create the first MP3 output file
     mp3Handle = openMp3File(mp3Dir)
     if mp3Handle == nil {
         fmt.Fprintf(os.Stderr, "Unable to create temporary file for MP3 output in directory \"%s\" (permissions?).\n", mp3Dir)
         os.Exit(-1)
     }
-    
+
     fmt.Printf("Audio processing channel created and now being serviced.\n")
-    
+
     // Timed function that processes received datagrams and feeds the output stream
     go func() {
-        for _ = range processTicker.C {            
+        for _ = range processTicker.C {
             // Go through the list of newly arrived datagrams, processing them and moving
             // them to the processed list
             thingProcessed := false
             for newElement := newDatagramList.Front(); newElement != nil; newElement = newElement.Next() {
                 processDatagram(newElement.Value.(*UrtpDatagram), processedDatagramList)
-                log.Printf("%d byte(s) in the outgoing audio buffer.\n", pcmAudio.Len())
-                log.Printf("Moving datagram from the new list to the processed list...\n")
+                //log.Printf("%d byte(s) in the outgoing audio buffer.\n", pcmAudio.Len())
+                //log.Printf("Moving datagram from the new list to the processed list...\n")
                 processedDatagramList.PushFront(newElement.Value)
                 thingProcessed = true
                 newDatagramList.Remove(newElement)
@@ -326,18 +326,18 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                 for processedElement := processedDatagramList.Front(); processedElement != nil; processedElement = processedElement.Next() {
                     count++
                     if count > NUM_PROCESSED_DATAGRAMS {
-                        log.Printf("Removing a datagram from the processed list...\n")
+                        //log.Printf("Removing a datagram from the processed list...\n")
                         processedDatagramList.Remove(processedElement)
-                        log.Printf("%d datagram(s) now in the processed list.\n", processedDatagramList.Len())
+                        //log.Printf("%d datagram(s) now in the processed list.\n", processedDatagramList.Len())
                     }
                 }
             }
-            
+
             // Always have to encode something into the output stream
             samples := encodeOutput(mp3Writer, pcmHandle, mp3SamplesToEncode)
             samplesEncoded += samples
             mp3SamplesToEncode -= samples
-            
+
             if mp3SamplesToEncode <= 0 {
                 if mp3Handle != nil {
                     mp3Duration = time.Duration(samplesEncoded * 1000000 / SAMPLING_FREQUENCY) * time.Microsecond
@@ -359,7 +359,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                             mp3AudioFile.removable = false;
                             MediaControlChannel <- mp3AudioFile
                         } else {
-                            log.Printf("There was an error writing to \"%s\" (%s).\n", mp3Handle.Name(), err.Error())                 
+                            log.Printf("There was an error writing to \"%s\" (%s).\n", mp3Handle.Name(), err.Error())
                         }
                     } else {
                         mp3Handle.Close()
@@ -373,7 +373,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
             }
         }
     }()
-    
+
     // Process datagrams received on the channel
     go func() {
         for cmd := range channel {
@@ -381,7 +381,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                 // Handle datagrams, throw everything else away
                 case *UrtpDatagram:
                 {
-                    log.Printf("Adding a new datagram to the FIFO list...\n")
+                    //log.Printf("Adding a new datagram to the FIFO list...\n")
                     newDatagramList.PushBack(datagram)
                 }
             }
