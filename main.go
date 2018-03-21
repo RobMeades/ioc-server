@@ -52,7 +52,7 @@ var opts struct {
         PlaylistPath string `positional-arg-name:"playlistpath" description:"path to the live playlist file (any file extension will be replaced with .m3u8); the playlist file will be created by this program and the audio files will be stored in the same directory as the playlist file.  The HTML file that serves the playlist file should be placed in this directory."`
     } `positional-args:"true" required:"yes"`
     UseTcp bool `short:"t" long:"tcp" description:"expect a TCP connection rather than a UDP connection"`
-    PlaylistLengthSeconds uint `default:"10" short:"p" long:"duration" description:"the maximum duration of the playlist in seconds"`
+    PlaylistLengthSeconds uint `default:"4" short:"p" long:"duration" description:"the maximum duration of the playlist in seconds"`
     ClearTsDir bool `short:"c" long:"clear" description:"clear the segment files from the live playlist directory before using it"`
     OOSDir string `short:"o" long:"oosdir" description:"the path to a directory containing HTML and, optionally in the same directory, static playlist/audio files, to use when there is no live audio to stream (you must create these files yourself)"`
     OOSTimeSeconds uint `default:"300" short:"s" long:"oostime" description:"the number of seconds of inactivity after which the out of service HTML is used (only used if -o is specified)"`
