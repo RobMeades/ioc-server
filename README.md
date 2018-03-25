@@ -28,11 +28,12 @@ Now disable root login by editing `/etc/ssh/sshd_config` to set the line `Permit
 Then close your SSH terminal and start a new one with the new `username`.
 
 ## Development
-You will need to develop this machine for which you must install the necessary tools:
+You will need to develop on this machine in Golang and JS for which you must install the necessary tools:
 
 ```
 sudo apt-get update
 sudo apt-get install build-essential
+sudo apt-get install npm
 ```
 
 ## DNS Entry
@@ -232,6 +233,15 @@ Test this with:
 `sudo systemctl enable ioc-server`
 
 Reboot and check that it starts correctly; if it does not, check what happened with `sudo journalctl -b` and/or `sudo dmesg`.
+
+# HLS
+It is possible to use [hls.js](https://github.com/video-dev/hls.js) from a content delivery network, e.g. https://cdn.jsdelivr.net/npm/hls.js@latest.  However, I thought that [debugging and tweaking may be required](https://github.com/video-dev/hls.js/blob/master/docs/API.md) for the real-timeness and cellular-flakiness of this application and hence I installed it on the server so that it could be served directly, in modified form if required.  Install/build it with:
+
+```
+git clone https://github.com/video-dev/hls.js.git
+cd hls.js
+npm install
+```
 
 # Credits
 This repo includes code imported from:
