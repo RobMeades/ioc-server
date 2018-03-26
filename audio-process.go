@@ -38,10 +38,10 @@ const NUM_PROCESSED_DATAGRAMS int = 1
 const MAX_GAP_FILL_MILLISECONDS int = 500
 
 // The amount of audio in each MP3 output file
-const MAX_MP3_FILE_DURATION time.Duration = time.Second * 1
+const MAX_MP3_FILE_DURATION time.Duration = time.Millisecond * 333
 
-// The number of samples represented by the MP3 file duration
-const MAX_MP3_FILE_SAMPLES int = int(MAX_MP3_FILE_DURATION / time.Second) * SAMPLING_FREQUENCY
+// The number of samples represented by the MP3 file duration (calculated this way to allow millisecond durations)
+const MAX_MP3_FILE_SAMPLES int = int(MAX_MP3_FILE_DURATION / time.Millisecond) * SAMPLING_FREQUENCY / 1000
 
 // The track title to use
 const MP3_TITLE string = "Internet of Chuffs"
@@ -369,7 +369,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                 mp3Offset += mp3Duration
                 mp3Handle = openMp3File(mp3Dir)
                 samplesEncoded = 0
-                mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame
+                mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES
             }
         }
     }()

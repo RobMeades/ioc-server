@@ -114,7 +114,6 @@ func updatePlaylistFile(fileName string, mediaSequenceNumber int) bool {
     for newElement := mp3FileList.Front(); newElement != nil; newElement = newElement.Next() {
         if newElement.Value.(*Mp3AudioFile).usable {
             numSegments++
-            fmt.Fprintf(&segmentData, "#EXT-X-PROGRAM-DATE-TIME:%s\r\n", ukTimeIso8601(newElement.Value.(*Mp3AudioFile).timestamp))
             fmt.Fprintf(&segmentData, "#EXTINF:%f, %s\r\n", float32(newElement.Value.(*Mp3AudioFile).duration) / float32(time.Second),
                         newElement.Value.(*Mp3AudioFile).title)
             fmt.Fprintf(&segmentData, "%s\r\n", newElement.Value.(*Mp3AudioFile).fileName)
