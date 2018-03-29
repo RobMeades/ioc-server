@@ -242,7 +242,7 @@ git clone https://github.com/video-dev/hls.js.git
 cd hls.js
 npm install
 ```
-I made one change: edit (this line)[https://github.com/video-dev/hls.js/blob/master/src/controller/level-controller.js#L370] and replace `1000` with `newDetails.targetduration / 2`.  Actually, I just edited `dist/hls.js`, found the same line and replaced it there, since I didn't have the webkit development environment installed.  Anyway, this removes the minimum manifest re-read period of 1 second, which allows the lowest possible audio latency.
+I made one change: edit [this line](https://github.com/video-dev/hls.js/blob/master/src/controller/level-controller.js#L370) and replace `1000` with `newDetails.targetduration / 2`.  Actually, I just edited `dist/hls.js`, found the same line and replaced it there, since I didn't have the Webkit development environment installed.  Anyway, this removes the minimum manifest re-read period of 1 second, which allows the lowest possible audio latency.
 
 # Credits
 This repo includes code imported from:
