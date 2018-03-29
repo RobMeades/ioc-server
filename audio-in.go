@@ -90,7 +90,7 @@ const (
 // A buffer for TCP data
 var tcpBuffer bytes.Buffer
 
-// A buffer in which to assemble a URTP packet (required for TCP mode) 
+// A buffer in which to assemble a URTP packet (required for TCP mode)
 var urtpDatagram bytes.Buffer
 
 // Where we are in reassembling a URTP packet (required for TCP reception)
@@ -112,7 +112,7 @@ func decodePcm(audioDataPcm []byte) *[]int16 {
     x := 0
     for y := range audio {
         audio[y] = (int16(audioDataPcm[x]) << 8) + int16(audioDataPcm[x + 1])
-        x += 2 
+        x += 2
     }
 
     return &audio

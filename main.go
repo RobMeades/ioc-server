@@ -69,8 +69,8 @@ func cli() {
      _, err := flags.Parse(&opts)
 
     if err != nil {
-        os.Exit(-1)        
-    }    
+        os.Exit(-1)
+    }
 }
 
 // Entry point
@@ -83,7 +83,7 @@ func main() {
 
     // Handle the command line
     cli()
-    
+
     // Open the log and raw PCM files
     if opts.LogName != "" {
         logHandle, err = os.Create(opts.LogName);
@@ -91,17 +91,19 @@ func main() {
         if logHandle != nil {
             defer logHandle.Close()
             log.SetOutput(logHandle)
-        }        
-    }    
+        }
+    }
+    log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+    
     if (opts.RawPcmName != "") && (err == nil) {
-        log.Printf("Opening \"%s\" for raw PCM output.\n", opts.RawPcmName)        
+        log.Printf("Opening \"%s\" for raw PCM output.\n", opts.RawPcmName)
         rawPcmHandle, err = os.Create(opts.RawPcmName);
     }
-    
+
     // Get the directory in which to store MP3 files and the playlist file path
     mp3Dir = filepath.Dir(opts.Required.PlaylistPath)
     playlistPath = strings.TrimSuffix(opts.Required.PlaylistPath, filepath.Ext(opts.Required.PlaylistPath)) + PLAYLIST_EXTENSION
-    
+
     // Clear the TS files from the live playlist directory
     if mp3Dir != "" {
         _ = os.MkdirAll(mp3Dir, os.ModePerm)
@@ -119,17 +121,17 @@ func main() {
                 log.Printf("Unable to delete %s files (%s).\n", SEGMENT_EXTENSION, err1.Error())
             }
         }
-    } 
-    
+    }
+
     if err == nil {
         defer rawPcmHandle.Close()
-        
+
         // Run the audio processing loop
         go operateAudioProcessing(rawPcmHandle, mp3Dir)
-        
+
         // Run the server loop for incoming audio
         go operateAudioIn(opts.Required.In, opts.UseTcp)
-        
+
         // Run the HTTP server for audio output (which should block)
         operateAudioOut(opts.Required.Out, playlistPath, opts.PlaylistLengthSeconds, opts.OOSDir, opts.OOSTimeSeconds)
     } else {

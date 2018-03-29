@@ -27,11 +27,10 @@ import (
     "sync"
     "container/list"
     "math"
-//    "github.com/gorilla/mux"
 )
 
 //--------------------------------------------------------------------
-// Types 
+// Types
 //--------------------------------------------------------------------
 
 // Description of an MP3 audio file
@@ -61,9 +60,6 @@ var MediaControlChannel chan<- interface{}
 
 // List of output MP3 files
 var mp3FileList = list.New()
-
-// Mutex to manage access to the playlist file
-var playlistAccess sync.Mutex
 
 //--------------------------------------------------------------------
 // Functions
@@ -100,13 +96,14 @@ func ukTimeIso8601(timestamp time.Time) string {
     return timestamp.In(location).Format("2006-01-02T15:04:05.000-07:00")
 }
 
-// Create/update the playlist file
+// Make a playlist that could be written to file or served to HTTP
 // See https://en.wikipedia.org/wiki/M3U
 // and, in much more detail, https://tools.ietf.org/html/draft-pantos-http-live-streaming-17#section-4
-func updatePlaylistFile(fileName string, mediaSequenceNumber int) bool {
+func makePlaylist(playlist *[]byte, playlistLocker *sync.Mutex, mediaSequenceNumber int, fileName string) bool {
     var maxSegmentDuration time.Duration
-    var segmentData bytes.Buffer
     var numSegments int
+    var segmentData bytes.Buffer
+    var data bytes.Buffer
     var totalDuration time.Duration
 
     // Go through all of the MP3 files, assembling the segment
@@ -124,29 +121,37 @@ func updatePlaylistFile(fileName string, mediaSequenceNumber int) bool {
         }
     }
 
-    // Now lock access to the file and create it
-    playlistAccess.Lock()
+    // Write the fixed header
+    fmt.Fprintf(&data, "#EXTM3U\r\n")
+    fmt.Fprintf(&data, "#EXT-X-VERSION:3\r\n")
+    if numSegments > 0 {
+        // Write the dynamic header fields
+        fmt.Fprintf(&data, "#EXT-X-TARGETDURATION:%d\r\n", int(math.Ceil(float64(maxSegmentDuration) / float64(time.Second))))
+        fmt.Fprintf(&data, "#EXT-X-MEDIA-SEQUENCE:%d\r\n", mediaSequenceNumber)
+        if totalDuration > MAX_PLAY_LAG {
+            fmt.Fprintf(&data, "#EXT-X-START:TIME-OFFSET=-%f\r\n", float32(MAX_PLAY_LAG) / float32(time.Second))
+        }
+        // Write the segment files
+        segmentData.WriteTo(&data)
+    }
+
+    playlistLocker.Lock()
+    
+    // Update playlist from the buffer
+    log.Printf("Made a playlist with %d segment(s).\n", numSegments)
+    *playlist = data.Bytes()
+
+    // Update the file to match so that we can see what's going on
     handle, err := os.Create(fileName)
     if err == nil {
-        // Write the fixed header
-        fmt.Fprintf(handle, "#EXTM3U\r\n")
-        fmt.Fprintf(handle, "#EXT-X-VERSION:3\r\n")
-        if numSegments > 0 {
-            // Write the dynamic header fields
-            fmt.Fprintf(handle, "#EXT-X-TARGETDURATION:%d\r\n", int(math.Ceil(float64(maxSegmentDuration) / float64(time.Second))))
-            fmt.Fprintf(handle, "#EXT-X-MEDIA-SEQUENCE:%d\r\n", mediaSequenceNumber)
-            if totalDuration > MAX_PLAY_LAG {
-                fmt.Fprintf(handle, "#EXT-X-START:TIME-OFFSET=-%f\r\n", float32(MAX_PLAY_LAG) / float32(time.Second))
-            }
-            // Write the segment list
-            segmentData.WriteTo(handle)
-        }
-        log.Printf("Updated playlist file \"%s\" with %d segment(s).\n", fileName, numSegments)
+        // Write the data
+        handle.Write(*playlist)
         handle.Close()
     } else {
         log.Printf("Unable to create playlist file \"%s\" (%s).\n", fileName, err.Error())
     }
-    playlistAccess.Unlock()
+
+    playlistLocker.Unlock()
 
     return err == nil
 }
@@ -169,17 +174,23 @@ func stopCache(out http.ResponseWriter) {
 }
 
 // Handle a stream request
-func streamHandler(out http.ResponseWriter, in *http.Request) {
+func streamHandler(out http.ResponseWriter, in *http.Request, playlist *[]byte, playlistLocker *sync.Mutex) {
     var ext string = filepath.Ext(in.URL.Path)
 
     log.Printf("Stream handler was asked for \"%s\"...\n", in.URL.Path)
     if ext == PLAYLIST_EXTENSION {
-        // Serve the playlist file
-        log.Printf("Serving playlist file \"%s\".\n", in.URL.Path)
-        playlistAccess.Lock()
-        http.ServeFile(out, in, in.URL.Path)
-        playlistAccess.Unlock()
         out.Header().Set("Content-Type","application/x-mpegurl")
+        if (playlist != nil) && (playlistLocker != nil) {
+            // Serve the playlist from the buffer
+            playlistLocker.Lock()
+            log.Printf("Serving playlist from buffer (%d byte(s)).\n", len(*playlist))
+            http.ServeContent(out, in, filepath.Base(in.URL.Path), time.Time{}, bytes.NewReader(*playlist))
+            playlistLocker.Unlock()
+        } else {
+            // Serve the playlist file requested
+            log.Printf("Serving playlist file \"%s\".\n", in.URL.Path)
+            http.ServeFile(out, in, in.URL.Path)
+        }
     } else if ext == SEGMENT_EXTENSION {
         // Serve the requested segment
         log.Printf("Serving segment file \"%s\".\n", in.URL.Path)
@@ -211,7 +222,7 @@ func clearMp3FileList(mp3Dir string) {
 
 // Start HTTP server for streaming output; this function should never return
 func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uint,
-                    oOSDir string, oosTimeSeconds uint) {
+                     oOSDir string, oosTimeSeconds uint) {
     var channel = make(chan interface{})
     var err error
     var mp3Dir string
@@ -221,6 +232,8 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
     var mp3RemovableAge time.Duration = mp3UsableAge * 2
     var oosAge time.Duration = time.Second * time.Duration(oosTimeSeconds)
     var next *list.Element
+    var playlist []byte
+    var playlistLocker sync.Mutex
 
     streamTicker := time.NewTicker(time.Second * 1)
     mux := http.NewServeMux()
@@ -234,7 +247,7 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
     mp3Dir = filepath.Dir(playlistPath)
 
     // Create an initial (empty) playlist file
-    if !updatePlaylistFile(playlistPath, mediaSequenceNumber) {
+    if !makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath) {
         fmt.Fprintf(os.Stderr, "Unable to create playlist file \"%s\".\n", playlistPath)
         os.Exit(-1)
     }
@@ -255,7 +268,7 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
                     log.Printf ("MP3 file \"%s\", received at %s, no longer usable (time now is %s).\n",
                                 newElement.Value.(*Mp3AudioFile).fileName, newElement.Value.(*Mp3AudioFile).timestamp.String(),
                                 time.Now().String())
-                    updatePlaylistFile(playlistPath, mediaSequenceNumber)
+                    makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
                 }
                 if (!newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > mp3RemovableAge) {
                     newElement.Value.(*Mp3AudioFile).removable = true;
@@ -283,7 +296,7 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
                 {
                     log.Printf("Adding new MP3 file \"%s\", duration %d millisecond(s), to the FIFO list...\n", message.fileName, int(message.duration / time.Millisecond))
                     mp3FileList.PushBack(message)
-                    updatePlaylistFile(playlistPath, mediaSequenceNumber)
+                    makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
                 }
             }
         }
@@ -305,14 +318,14 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
     mux.HandleFunc(mp3Dir + "/", func(out http.ResponseWriter, in *http.Request) {
         if !filterCrossDomainRequest(out, in) {
             addCrossDomainToResponse(out)
-            streamHandler(out, in)
+            streamHandler(out, in, &playlist, &playlistLocker)
         }
     })
     if oOSDir != "" {
         mux.HandleFunc(oOSDir + "/", func(out http.ResponseWriter, in *http.Request) {
             if !filterCrossDomainRequest(out, in) {
                 addCrossDomainToResponse(out)
-                streamHandler(out, in)
+                streamHandler(out, in, nil, nil)
             }
         })
     }

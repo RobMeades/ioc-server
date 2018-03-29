@@ -363,7 +363,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                         }
                     } else {
                         mp3Handle.Close()
-                        log.Printf("There was an error writing the ID3 tag to \"%s\", closing MP3 file (%s).\n", mp3Handle.Name(), err.Error())                 
+                        log.Printf("There was an error writing the ID3 tag to \"%s\", closing MP3 file (%s).\n", mp3Handle.Name(), err.Error())
                     }
                 }
                 mp3Offset += mp3Duration
