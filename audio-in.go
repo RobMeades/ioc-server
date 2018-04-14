@@ -18,6 +18,8 @@ import (
     "os"
     "log"
     "bytes"
+    "time"
+    "encoding/binary"
 //    "encoding/hex"
 )
 
@@ -49,7 +51,7 @@ const SAMPLES_PER_BLOCK int = SAMPLING_FREQUENCY * BLOCK_DURATION_MS / 1000
 const SAMPLES_PER_UNICAM_BLOCK int = SAMPLING_FREQUENCY / 1000
 const UNICAM_CODED_SHIFT_SIZE_BITS int = 4
 
-// The URTP datagram paramegers
+// The URTP datagram parameters
 const SYNC_BYTE byte = 0x5a
 const URTP_TIMESTAMP_SIZE int = 8
 const URTP_SEQUENCE_NUMBER_SIZE int = 2
@@ -57,6 +59,11 @@ const URTP_PAYLOAD_SIZE_SIZE int = 2
 const URTP_HEADER_SIZE int = 14
 const URTP_SAMPLE_SIZE int = 2
 const URTP_DATAGRAM_MAX_SIZE int = URTP_HEADER_SIZE + SAMPLES_PER_BLOCK * URTP_SAMPLE_SIZE
+
+// The Hello Request/Response parameters
+const HELLO_SYNC_BYTE byte = 0xae
+const HELLO_REQUEST_LENGTH int = 10
+const HELLO_RESPONSE_LENGTH int = HELLO_REQUEST_LENGTH + 8
 
 // Offset to the number of bytes part of the URTP header
 const URTP_NUM_BYTES_AUDIO_OFFSET int = 12
@@ -275,11 +282,34 @@ func verifyUrtpHeader(header []byte) bool {
     return isHeader
 }
 
+// Handle a a Hello Request
+func handleHelloRequestDatagram(data []byte, server *net.UDPConn, remoteAddress *net.UDPAddr) {
+    var timestamp int64
+    
+    timestamp = (int64(data[2]) << 56) + (int64(data[3]) << 48) + (int64(data[4]) << 40) + (int64(data[5]) << 32) + 
+                (int64(data[6]) << 24) + (int64(data[7]) << 16) + (int64(data[8]) << 8) + int64(data[9])
+    log.Printf("Hello Request %d received with timestamp %6.3f ms (%6.3f ms ago).\n", data[1], float64(timestamp) / 1000,
+               float64((time.Now().UnixNano() / 1000) - timestamp) / 1000)
+    // Send back the Hello Response (which is a copy of the Hello Request with
+    // the 64 byte microsecond time appended)
+    helloResponse := data
+    timeNow := make([]byte, binary.MaxVarintLen64)
+    binary.BigEndian.PutUint64(timeNow, uint64(time.Now().UnixNano() / 1000))
+    helloResponse = append(helloResponse, timeNow...)
+    _, err := server.WriteToUDP(helloResponse, remoteAddress)
+    if err == nil {
+        log.Printf("Hello Response sent to %s.\n", remoteAddress.String())
+    } else {
+        log.Printf("Couldn't send Hello Response (%s).\n", err.Error())
+    }
+}
+
 // Handle a stream of (e.g. TCP) bytes containing URTP datagrams
 // For details of the format, see the client code (ioc-client)
-func handleUrtpStream(data []byte) {
+func handleUrtpStream(data []byte) bool {
     var err error
     var item byte
+    var partOfStream bool = false;
 
     // Write all the data to the TCP buffer
     tcpBuffer.Write(data)
@@ -291,9 +321,10 @@ func handleUrtpStream(data []byte) {
             case URTP_STATE_WAITING_SYNC:
                 // Look for the sync byte
                 if item == SYNC_BYTE {
+                    partOfStream = true;
                     header.WriteByte(item)
                     urtpReassemblyState = URTP_STATE_WAITING_AUDIO_CODING
-                } else {
+                } else {                
                     //log.Printf("TCP reassembly: awaiting initial sync byte but 0x%x isn't one (0x%x).\n", item, SYNC_BYTE)
                     header.Reset()
                     urtpReassemblyState = URTP_STATE_WAITING_SYNC
@@ -301,6 +332,7 @@ func handleUrtpStream(data []byte) {
             case URTP_STATE_WAITING_AUDIO_CODING:
                 // Look for the audio coding scheme and check it
                 if item < MAX_NUM_AUDIO_CODING_SCHEMES {
+                    partOfStream = true;
                     header.WriteByte(item)
                     //log.Printf("TCP reassembly: audio coding scheme 0x%x.\n", item)
                     urtpReassemblyState = URTP_STATE_WAITING_SEQUENCE_NUMBER
@@ -311,6 +343,7 @@ func handleUrtpStream(data []byte) {
                 }
             case URTP_STATE_WAITING_SEQUENCE_NUMBER:
                 // Read in the two-byte sequence number
+                partOfStream = true;
                 header.WriteByte(item)
                 urtpByteCount++
                 //log.Printf("TCP reassembly: sequence number byte %d is 0x%x.\n", urtpByteCount, item)
@@ -320,6 +353,7 @@ func handleUrtpStream(data []byte) {
                 }
             case URTP_STATE_WAITING_TIMESTAMP:
                 // Read in the eight-byte timestamp
+                partOfStream = true;
                 header.WriteByte(item)
                 urtpByteCount++
                 //log.Printf("TCP reassembly: timestamp byte %d is 0x%x.\n", urtpByteCount, item)
@@ -329,6 +363,7 @@ func handleUrtpStream(data []byte) {
                 }
             case URTP_STATE_WAITING_PAYLOAD_SIZE:
                 // Read in the two-byte payload size
+                partOfStream = true;
                 header.WriteByte(item)
                 urtpPayloadSize += int (uint(item) << uint((8 * (URTP_PAYLOAD_SIZE_SIZE - urtpByteCount - 1))))
                 urtpByteCount++
@@ -346,6 +381,7 @@ func handleUrtpStream(data []byte) {
                     } else {
                         //log.Printf("TCP reassembly: NOT a URTP header, payload length %d (0x%x, in the last two bytes) is larger than the maximum number of payload bytes (%d)).\n",
                         //           urtpPayloadSize, urtpPayloadSize, URTP_DATAGRAM_MAX_SIZE)
+                        partOfStream = false;
                         urtpPayloadSize = 0
                         header.Reset()
                         urtpReassemblyState = URTP_STATE_WAITING_SYNC
@@ -353,6 +389,7 @@ func handleUrtpStream(data []byte) {
                 }
             case URTP_STATE_WAITING_PAYLOAD:
                 // Write the one byte we have
+                partOfStream = true;
                 urtpDatagram.WriteByte(item)
                 if urtpPayloadSize > 0 {
                     urtpPayloadSize--
@@ -374,18 +411,22 @@ func handleUrtpStream(data []byte) {
                     //log.Printf("TCP reassembly: %d byte(s) of payload remaining to be read.\n", urtpPayloadSize)
                 }
             default:
+                partOfStream = false;
                 urtpByteCount = 0
                 urtpPayloadSize = 0
                 header.Reset()
                 urtpReassemblyState = URTP_STATE_WAITING_SYNC
         }
     }
+    
+    return partOfStream
 }
 
 // Run a UDP server forever
 func udpServer(port string) {
     var numBytesIn int
     var server *net.UDPConn
+    var remoteAddress *net.UDPAddr
     line := make([]byte, URTP_DATAGRAM_MAX_SIZE)
 
     // Set up the server
@@ -401,10 +442,13 @@ func udpServer(port string) {
                 log.Printf("Unable to set optimal read buffer size (%s).\n", err1.Error())
             }
             // Read UDP packets forever
-            for numBytesIn, _, err = server.ReadFromUDP(line); (err == nil) && (numBytesIn > 0); numBytesIn, _, err = server.ReadFromUDP(line) {
+            for numBytesIn, remoteAddress, err = server.ReadFromUDP(line); (err == nil) && (numBytesIn > 0); numBytesIn, remoteAddress, err = server.ReadFromUDP(line) {
                 // For UDP, a single URTP datagram arrives in a single UDP packet
                 if (numBytesIn >= URTP_HEADER_SIZE) && (verifyUrtpHeader(line[:URTP_HEADER_SIZE])) {
                     handleUrtpDatagram(line[:numBytesIn])
+                    // If it's not a URTP datagram it might be a Hello Request datagram
+                } else if (numBytesIn == HELLO_REQUEST_LENGTH && (line[0] == HELLO_SYNC_BYTE)) {
+                    handleHelloRequestDatagram(line[:numBytesIn], server, remoteAddress)
                 }
             }
             if err != nil {
@@ -472,6 +516,7 @@ func tcpServer(port string) {
 // Run the server that receives the audio of Chuffs; this function should never return
 func operateAudioIn(port string, useTCP bool) {
     if useTCP {
+        go udpServer(port)
         tcpServer(port)
     } else {
         udpServer(port)
