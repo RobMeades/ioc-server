@@ -98,8 +98,8 @@ func ukTimeIso8601(timestamp time.Time) string {
 
 // Make a playlist that could be written to file or served to HTTP
 // See https://en.wikipedia.org/wiki/M3U
-// and, in much more detail, https://tools.ietf.org/html/draft-pantos-http-live-streaming-17#section-4
-func makePlaylist(playlist *[]byte, playlistLocker *sync.Mutex, mediaSequenceNumber int, fileName string) bool {
+// and, in much more detail, https://tools.ietf.org/html/draft-pantos-http-live-streaming-23#section-4
+func makePlaylist(playlist *[]byte, playlistLocker *sync.Mutex, mediaSequenceNumber int, fileName string) (time.Duration, error) {
     var maxSegmentDuration time.Duration
     var numSegments int
     var segmentData bytes.Buffer
@@ -153,7 +153,7 @@ func makePlaylist(playlist *[]byte, playlistLocker *sync.Mutex, mediaSequenceNum
 
     playlistLocker.Unlock()
 
-    return err == nil
+    return totalDuration, err
 }
 
 // Home page handler
@@ -247,8 +247,9 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
     mp3Dir = filepath.Dir(playlistPath)
 
     // Create an initial (empty) playlist file
-    if !makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath) {
-        fmt.Fprintf(os.Stderr, "Unable to create playlist file \"%s\".\n", playlistPath)
+    _, err = makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Unable to create playlist file \"%s\" (%s).\n", playlistPath, err.Error())
         os.Exit(-1)
     }
 
@@ -268,7 +269,11 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
                     log.Printf ("MP3 file \"%s\", received at %s, no longer usable (time now is %s).\n",
                                 newElement.Value.(*Mp3AudioFile).fileName, newElement.Value.(*Mp3AudioFile).timestamp.String(),
                                 time.Now().String())
-                    makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
+                    bufferLength, _ := makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
+                    // Let the processing channel know of our buffer depth
+                    outputBufferState := new(OutputBufferState)
+                    outputBufferState.Buffered = bufferLength
+                    ProcessDatagramsChannel <- outputBufferState
                 }
                 if (!newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > mp3RemovableAge) {
                     newElement.Value.(*Mp3AudioFile).removable = true;

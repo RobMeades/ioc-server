@@ -146,7 +146,7 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
     // Allocate space
     audio := make([]int16, numBlocks * SAMPLES_PER_UNICAM_BLOCK)
 
-//    log.Printf("UNICAM: %d byte(s) containing %d block(s), expanding to a total of %d samples(s) of uncompressed audio.\n", len(audioDataUnicam), numBlocks, len(audio))
+    //log.Printf("UNICAM: %d byte(s) containing %d block(s), expanding to a total of %d samples(s) of uncompressed audio.\n", len(audioDataUnicam), numBlocks, len(audio))
 
     // Decode the blocks
     for blockCount < numBlocks {

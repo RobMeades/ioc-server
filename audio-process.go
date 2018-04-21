@@ -28,6 +28,16 @@ import (
 )
 
 //--------------------------------------------------------------------
+// Types
+//--------------------------------------------------------------------
+
+// Structure to represent the state of the audio output buffer
+// that we are feeding at MediaControlChannel.
+type OutputBufferState struct {
+    Buffered  time.Duration
+}
+
+//--------------------------------------------------------------------
 // Constants
 //--------------------------------------------------------------------
 
@@ -36,6 +46,10 @@ const NUM_PROCESSED_DATAGRAMS int = 1
 
 // Guard against silly sequence number gaps
 const MAX_GAP_FILL_MILLISECONDS int = 500
+
+// The minimum size that we allow the buffered audio
+// in MediaControlChannel to get to
+const MIN_OUTPUT_BUFFERED_AUDIO time.Duration = time.Millisecond * 1000
 
 // The amount of audio in each MP3 output file
 const MAX_MP3_FILE_DURATION time.Duration = time.Millisecond * 333
@@ -180,7 +194,6 @@ func handleGap(gap int, previousDatagram * UrtpDatagram) {
 
 // Process a URTP datagram
 func processDatagram(datagram * UrtpDatagram, savedDatagramList * list.List) {
-
     var previousDatagram *UrtpDatagram
 
     if savedDatagramList.Front() != nil {
@@ -195,7 +208,7 @@ func processDatagram(datagram * UrtpDatagram, savedDatagramList * list.List) {
         handleGap(int(datagram.SequenceNumber - previousDatagram.SequenceNumber) * SAMPLES_PER_BLOCK, previousDatagram)
     }
 
-        // Copy the received audio into the buffer
+    // Copy the received audio into the buffer
     if datagram.Audio != nil {
         audioBytes := make([]byte, len(*datagram.Audio) * URTP_SAMPLE_SIZE)
         for x, y := range *datagram.Audio {
@@ -243,6 +256,41 @@ func encodeOutput (mp3Writer *lame.LameWriter, pcmHandle *os.File, numSamples in
     return bytesEncoded / URTP_SAMPLE_SIZE
 }
 
+// Encode numSamples of silence into a file
+func createSilenceFile(dirName string, numSamples int, offset time.Duration) (*os.File, error) {
+    var mp3Handle *os.File
+    var err error
+    var mp3Writer *lame.LameWriter
+    var mp3Audio bytes.Buffer
+    silencePcm := make([]byte, numSamples * URTP_SAMPLE_SIZE)
+
+    mp3Handle = openMp3File(dirName)
+    if mp3Handle != nil {
+        mp3Writer, _ = createMp3Writer(&mp3Audio)
+        if mp3Writer != nil {
+            log.Printf("Encoding %d byte(s) of silence into \"%s\" at offset %6.3f...\n", len(silencePcm), mp3Handle.Name(), float64(offset) / float64(time.Second))
+            err = writeTag(mp3Handle, offset)
+            if err == nil {
+                _, err = mp3Writer.Write(silencePcm)
+                if err == nil {
+                    _, err = mp3Audio.WriteTo(mp3Handle)
+                    if err != nil {
+                        log.Printf("There was an error writing to \"%s\" (%s).\n", mp3Handle.Name(), err.Error())
+                    }
+                    mp3Handle.Close()
+                    log.Printf("Closed MP3 silence file.\n")
+                } else {
+                    log.Printf("Unable to encode silence into MP3 file.\n")
+                }
+            }
+        } else {
+            log.Printf("Unable to create MP3 silence writer.\n")
+        }
+    }
+
+    return mp3Handle, err
+}
+
 // Write the ID3 tag to the start of an MP3 segment file indicating
 // its time offset from the previous segment file
 func writeTag(mp3Handle *os.File, offset time.Duration) error {
@@ -276,7 +324,6 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
     var mp3Writer *lame.LameWriter
     var mp3SamplesPerFrame int
     var mp3Handle *os.File
-    var err error
     var mp3Duration time.Duration
     var mp3SamplesToEncode int
     var samplesEncoded int
@@ -304,6 +351,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
         fmt.Fprintf(os.Stderr, "Unable to create temporary file for MP3 output in directory \"%s\" (permissions?).\n", mp3Dir)
         os.Exit(-1)
     }
+    
 
     fmt.Printf("Audio processing channel created and now being serviced.\n")
 
@@ -343,7 +391,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                     mp3Duration = time.Duration(samplesEncoded * 1000000 / SAMPLING_FREQUENCY) * time.Microsecond
                     log.Printf("Writing %d millisecond(s) of MP3 audio (representing %d samples) to \"%s\".\n",
                                mp3Duration / time.Millisecond, samplesEncoded, mp3Handle.Name())
-                    err = writeTag(mp3Handle, mp3Offset)
+                    err := writeTag(mp3Handle, mp3Offset)
                     if err == nil {
                         _, err = mp3Audio.WriteTo(mp3Handle)
                         mp3Handle.Close()
@@ -369,7 +417,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                 mp3Offset += mp3Duration
                 mp3Handle = openMp3File(mp3Dir)
                 samplesEncoded = 0
-                mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES
+                mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame
             }
         }
     }()
@@ -377,12 +425,34 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
     // Process datagrams received on the channel
     go func() {
         for cmd := range channel {
-            switch datagram := cmd.(type) {
+            switch msg := cmd.(type) {
                 // Handle datagrams, throw everything else away
                 case *UrtpDatagram:
                 {
                     //log.Printf("Adding a new datagram to the FIFO list...\n")
-                    newDatagramList.PushBack(datagram)
+                    newDatagramList.PushBack(msg)
+                }
+                // If the output buffer has got too low then send a silence frame
+                // of one MP3 file duration
+                case *OutputBufferState:
+                {
+                    log.Printf("Output buffer has %d ms of buffered audio.\n", msg.Buffered / time.Millisecond)
+                    if (msg.Buffered < MIN_OUTPUT_BUFFERED_AUDIO) && (mp3Handle != nil) {
+                        mp3SilenceHandle, err := createSilenceFile(mp3Dir, MAX_MP3_FILE_SAMPLES, mp3Offset)
+                        if err == nil {
+                            silenceDuration := time.Duration(MAX_MP3_FILE_SAMPLES * 1000000 / SAMPLING_FREQUENCY) * time.Microsecond;
+                            mp3Offset += silenceDuration;
+                            // Let the audio output channel know of the new silence file
+                            mp3AudioFile := new(Mp3AudioFile)
+                            mp3AudioFile.fileName = filepath.Base(mp3SilenceHandle.Name())
+                            mp3AudioFile.title = MP3_TITLE
+                            mp3AudioFile.timestamp = time.Now()
+                            mp3AudioFile.duration = silenceDuration
+                            mp3AudioFile.usable = true;
+                            mp3AudioFile.removable = false;
+                            MediaControlChannel <- mp3AudioFile
+                        }
+                    }
                 }
             }
         }
