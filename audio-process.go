@@ -389,8 +389,8 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
             if mp3SamplesToEncode <= 0 {
                 if mp3Handle != nil {
                     mp3Duration = time.Duration(samplesEncoded * 1000000 / SAMPLING_FREQUENCY) * time.Microsecond
-                    log.Printf("Writing %d millisecond(s) of MP3 audio (representing %d samples) to \"%s\".\n",
-                               mp3Duration / time.Millisecond, samplesEncoded, mp3Handle.Name())
+                    log.Printf("Writing %d millisecond(s) of MP3 audio (representing %d samples) to \"%s\" at offset %6.3f.\n",
+                               mp3Duration / time.Millisecond, samplesEncoded, mp3Handle.Name(), float64(mp3Offset) / float64(time.Second))
                     err := writeTag(mp3Handle, mp3Offset)
                     if err == nil {
                         _, err = mp3Audio.WriteTo(mp3Handle)

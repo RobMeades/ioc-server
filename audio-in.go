@@ -33,6 +33,15 @@ type UrtpDatagram struct {
     Audio           *[]int16
 }
 
+// Where we are in reassembling a URTP packet (required for TCP reception)
+type TcpReassemblyData struct {
+    State         int
+    ByteCount     int
+    PayloadSize   int
+    Header        bytes.Buffer
+    Datagram      bytes.Buffer
+}
+
 //--------------------------------------------------------------------
 // Constants
 //--------------------------------------------------------------------
@@ -93,15 +102,6 @@ const (
 
 // A buffer for TCP data
 var tcpBuffer bytes.Buffer
-
-// A buffer in which to assemble a URTP packet (required for TCP mode)
-var urtpDatagram bytes.Buffer
-
-// Where we are in reassembling a URTP packet (required for TCP reception)
-var urtpReassemblyState int = URTP_STATE_WAITING_SYNC
-var urtpByteCount int
-var urtpPayloadSize int
-var header bytes.Buffer
 
 // The last time a timing datagram was sent
 var timingDatagramSent time.Time
@@ -294,7 +294,7 @@ func verifyUrtpHeader(header []byte) bool {
 // For details of the format, see the client code (ioc-client)
 // A timing datagram may be returned if the stream has reached a point
 // where one can be created
-func handleUrtpStream(data []byte) []byte {
+func handleUrtpStream(reassemblyData *TcpReassemblyData, data []byte) []byte {
     var err error
     var item byte
     var timingDatagram []byte
@@ -304,98 +304,98 @@ func handleUrtpStream(data []byte) []byte {
 
     //log.Printf("TCP reassembly: %d byte(s) received.\n", len(data))
     for item, err = tcpBuffer.ReadByte(); err == nil; item, err = tcpBuffer.ReadByte() {
-        //log.Printf("TCP reassembly: state %d, byte %d (0x%x).\n", urtpReassemblyState, item, item)
-        switch (urtpReassemblyState) {
+        //log.Printf("TCP reassembly: state %d, byte %d (0x%x).\n", reassemblyData.State, item, item)
+        switch (reassemblyData.State) {
             case URTP_STATE_WAITING_SYNC:
                 // Look for the sync byte
                 if item == SYNC_BYTE {
-                    header.WriteByte(item)
-                    urtpReassemblyState = URTP_STATE_WAITING_AUDIO_CODING
+                    reassemblyData.Header.WriteByte(item)
+                    reassemblyData.State = URTP_STATE_WAITING_AUDIO_CODING
                 } else {                
                     //log.Printf("TCP reassembly: awaiting initial sync byte but 0x%x isn't one (0x%x).\n", item, SYNC_BYTE)
-                    header.Reset()
-                    urtpReassemblyState = URTP_STATE_WAITING_SYNC
+                    reassemblyData.Header.Reset()
+                    reassemblyData.State = URTP_STATE_WAITING_SYNC
                 }
             case URTP_STATE_WAITING_AUDIO_CODING:
                 // Look for the audio coding scheme and check it
                 if item < MAX_NUM_AUDIO_CODING_SCHEMES {
-                    header.WriteByte(item)
+                    reassemblyData.Header.WriteByte(item)
                     //log.Printf("TCP reassembly: audio coding scheme 0x%x.\n", item)
-                    urtpReassemblyState = URTP_STATE_WAITING_SEQUENCE_NUMBER
+                    reassemblyData.State = URTP_STATE_WAITING_SEQUENCE_NUMBER
                 } else {
                     log.Printf("TCP reassembly: audio coding scheme in the second byte (0x%0x) is not a valid audio coding scheme.\n", item)
-                    header.Reset()
-                    urtpReassemblyState = URTP_STATE_WAITING_SYNC
+                    reassemblyData.Header.Reset()
+                    reassemblyData.State = URTP_STATE_WAITING_SYNC
                 }
             case URTP_STATE_WAITING_SEQUENCE_NUMBER:
                 // Read in the two-byte sequence number
-                header.WriteByte(item)
-                urtpByteCount++
-                //log.Printf("TCP reassembly: sequence number byte %d is 0x%x.\n", urtpByteCount, item)
-                if urtpByteCount >= URTP_SEQUENCE_NUMBER_SIZE {
-                    urtpByteCount = 0
-                    urtpReassemblyState = URTP_STATE_WAITING_TIMESTAMP
+                reassemblyData.Header.WriteByte(item)
+                reassemblyData.ByteCount++
+                //log.Printf("TCP reassembly: sequence number byte %d is 0x%x.\n", reassemblyData.ByteCount, item)
+                if reassemblyData.ByteCount >= URTP_SEQUENCE_NUMBER_SIZE {
+                    reassemblyData.ByteCount = 0
+                    reassemblyData.State = URTP_STATE_WAITING_TIMESTAMP
                 }
             case URTP_STATE_WAITING_TIMESTAMP:
                 // Read in the eight-byte timestamp
-                header.WriteByte(item)
-                urtpByteCount++
-                //log.Printf("TCP reassembly: timestamp byte %d is 0x%x.\n", urtpByteCount, item)
-                if urtpByteCount >= URTP_TIMESTAMP_SIZE {
-                    urtpByteCount = 0
-                    urtpReassemblyState = URTP_STATE_WAITING_PAYLOAD_SIZE
+                reassemblyData.Header.WriteByte(item)
+                reassemblyData.ByteCount++
+                //log.Printf("TCP reassembly: timestamp byte %d is 0x%x.\n", reassemblyData.ByteCount, item)
+                if reassemblyData.ByteCount >= URTP_TIMESTAMP_SIZE {
+                    reassemblyData.ByteCount = 0
+                    reassemblyData.State = URTP_STATE_WAITING_PAYLOAD_SIZE
                 }
             case URTP_STATE_WAITING_PAYLOAD_SIZE:
                 // Read in the two-byte payload size
-                header.WriteByte(item)
-                urtpPayloadSize += int (uint(item) << uint((8 * (URTP_PAYLOAD_SIZE_SIZE - urtpByteCount - 1))))
-                urtpByteCount++
-                if urtpByteCount >= URTP_PAYLOAD_SIZE_SIZE {
+                reassemblyData.Header.WriteByte(item)
+                reassemblyData.PayloadSize += int (uint(item) << uint((8 * (URTP_PAYLOAD_SIZE_SIZE - reassemblyData.ByteCount - 1))))
+                reassemblyData.ByteCount++
+                if reassemblyData.ByteCount >= URTP_PAYLOAD_SIZE_SIZE {
                     // Got the payload size, check it and, if it is OK, write the header
-                    urtpByteCount = 0
-                    //log.Printf("TCP reassembly: URTP payload is %d byte(s).\n", urtpPayloadSize)
-                    if urtpPayloadSize <= URTP_DATAGRAM_MAX_SIZE {
-                        urtpReassemblyState = URTP_STATE_WAITING_PAYLOAD
-                        urtpDatagram.Write(header.Bytes())
-                        if urtpPayloadSize == 0 {
-                            header.Reset()
-                            urtpReassemblyState = URTP_STATE_WAITING_SYNC
+                    reassemblyData.ByteCount = 0
+                    //log.Printf("TCP reassembly: URTP payload is %d byte(s).\n", reassemblyData.PayloadSize)
+                    if reassemblyData.PayloadSize <= URTP_DATAGRAM_MAX_SIZE {
+                        reassemblyData.State = URTP_STATE_WAITING_PAYLOAD
+                        reassemblyData.Datagram.Write(reassemblyData.Header.Bytes())
+                        if reassemblyData.PayloadSize == 0 {
+                            reassemblyData.Header.Reset()
+                            reassemblyData.State = URTP_STATE_WAITING_SYNC
                         }
                     } else {
                         //log.Printf("TCP reassembly: NOT a URTP header, payload length %d (0x%x, in the last two bytes) is larger than the maximum number of payload bytes (%d)).\n",
-                        //           urtpPayloadSize, urtpPayloadSize, URTP_DATAGRAM_MAX_SIZE)
-                        urtpPayloadSize = 0
-                        header.Reset()
-                        urtpReassemblyState = URTP_STATE_WAITING_SYNC
+                        //           reassemblyData.PayloadSize, reassemblyData.PayloadSize, URTP_DATAGRAM_MAX_SIZE)
+                        reassemblyData.PayloadSize = 0
+                        reassemblyData.Header.Reset()
+                        reassemblyData.State = URTP_STATE_WAITING_SYNC
                     }
                 }
             case URTP_STATE_WAITING_PAYLOAD:
                 // Write the one byte we have
-                urtpDatagram.WriteByte(item)
-                if urtpPayloadSize > 0 {
-                    urtpPayloadSize--
+                reassemblyData.Datagram.WriteByte(item)
+                if reassemblyData.PayloadSize > 0 {
+                    reassemblyData.PayloadSize--
                 }
                 // Read in as much of the rest of the payload as possible
                 bytesToRead := tcpBuffer.Len()
-                if bytesToRead > urtpPayloadSize {
-                    bytesToRead = urtpPayloadSize
+                if bytesToRead > reassemblyData.PayloadSize {
+                    bytesToRead = reassemblyData.PayloadSize
                 }
-                urtpDatagram.Write(tcpBuffer.Next(bytesToRead))
-                urtpPayloadSize -= bytesToRead
-                if urtpPayloadSize == 0 {
+                reassemblyData.Datagram.Write(tcpBuffer.Next(bytesToRead))
+                reassemblyData.PayloadSize -= bytesToRead
+                if reassemblyData.PayloadSize == 0 {
                     // Got the lot, handle the complete datagram now and reset the state machine
                     //log.Printf("TCP reassembly: URTP packet (%d bytes) fully received.\n", urtpDatagram.Len())
-                    timingDatagram = handleUrtpDatagram(urtpDatagram.Next(urtpDatagram.Len()))
-                    header.Reset()
-                    urtpReassemblyState = URTP_STATE_WAITING_SYNC
+                    timingDatagram = handleUrtpDatagram(reassemblyData.Datagram.Next(reassemblyData.Datagram.Len()))
+                    reassemblyData.Header.Reset()
+                    reassemblyData.State = URTP_STATE_WAITING_SYNC
                 } else {
-                    //log.Printf("TCP reassembly: %d byte(s) of payload remaining to be read.\n", urtpPayloadSize)
+                    //log.Printf("TCP reassembly: %d byte(s) of payload remaining to be read.\n", reassemblyData.PayloadSize)
                 }
             default:
-                urtpByteCount = 0
-                urtpPayloadSize = 0
-                header.Reset()
-                urtpReassemblyState = URTP_STATE_WAITING_SYNC
+                reassemblyData.ByteCount = 0
+                reassemblyData.PayloadSize = 0
+                reassemblyData.Header.Reset()
+                reassemblyData.State = URTP_STATE_WAITING_SYNC
         }
     }
     
@@ -483,16 +483,12 @@ func tcpServer(port string) {
                 // Process datagrams received on the channel in another go routine
                 fmt.Printf("Connection made by %s.\n", currentServer.RemoteAddr().String())
                 go func(server net.Conn) {
-                    // Reset URTP stream variables incase the previous run
-                    // ended half way through
-                    urtpByteCount = 0
-                    urtpPayloadSize = 0
-                    header.Reset()
-                    urtpReassemblyState = URTP_STATE_WAITING_SYNC
+                    var reassemblyData TcpReassemblyData
+                    reassemblyData.State = URTP_STATE_WAITING_SYNC
                     // Read packets until the connection is closed under us
                     line := make([]byte, URTP_DATAGRAM_MAX_SIZE)
                     for numBytesIn, err := server.Read(line); (err == nil) && (numBytesIn > 0); numBytesIn, err = server.Read(line) {
-                        timingDatagram := handleUrtpStream(line[:numBytesIn])
+                        timingDatagram := handleUrtpStream(&reassemblyData, line[:numBytesIn])
                         if (len(timingDatagram) > 0) && time.Now().After(timingDatagramSent.Add(TIMING_DATAGRAM_PERIOD)) {
                             numBytesOut, err := server.Write(timingDatagram)
                             if err == nil {
