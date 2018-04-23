@@ -235,7 +235,7 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
     var playlist []byte
     var playlistLocker sync.Mutex
 
-    streamTicker := time.NewTicker(time.Second * 1)
+    streamTicker := time.NewTicker(time.Millisecond * 100)
     mux := http.NewServeMux()
 
     MediaControlChannel = channel

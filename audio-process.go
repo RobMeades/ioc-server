@@ -438,20 +438,10 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
                 {
                     log.Printf("Output buffer has %d ms of buffered audio.\n", msg.Buffered / time.Millisecond)
                     if (msg.Buffered < MIN_OUTPUT_BUFFERED_AUDIO) && (mp3Handle != nil) {
-                        mp3SilenceHandle, err := createSilenceFile(mp3Dir, MAX_MP3_FILE_SAMPLES, mp3Offset)
-                        if err == nil {
-                            silenceDuration := time.Duration(MAX_MP3_FILE_SAMPLES * 1000000 / SAMPLING_FREQUENCY) * time.Microsecond;
-                            mp3Offset += silenceDuration;
-                            // Let the audio output channel know of the new silence file
-                            mp3AudioFile := new(Mp3AudioFile)
-                            mp3AudioFile.fileName = filepath.Base(mp3SilenceHandle.Name())
-                            mp3AudioFile.title = MP3_TITLE
-                            mp3AudioFile.timestamp = time.Now()
-                            mp3AudioFile.duration = silenceDuration
-                            mp3AudioFile.usable = true;
-                            mp3AudioFile.removable = false;
-                            MediaControlChannel <- mp3AudioFile
-                        }
+                        buffer := make([]byte, (MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame) * URTP_SAMPLE_SIZE)
+                        log.Printf("Adding %d samples (%d milliseconds) of silence into the PCM stream.\n",
+                                    len(buffer) / URTP_SAMPLE_SIZE, (len(buffer) / URTP_SAMPLE_SIZE) * 1000 / SAMPLING_FREQUENCY)
+                        pcmAudio.Write(buffer)
                     }
                 }
             }
