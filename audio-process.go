@@ -256,41 +256,6 @@ func encodeOutput (mp3Writer *lame.LameWriter, pcmHandle *os.File, numSamples in
     return bytesEncoded / URTP_SAMPLE_SIZE
 }
 
-// Encode numSamples of silence into a file
-func createSilenceFile(dirName string, numSamples int, offset time.Duration) (*os.File, error) {
-    var mp3Handle *os.File
-    var err error
-    var mp3Writer *lame.LameWriter
-    var mp3Audio bytes.Buffer
-    silencePcm := make([]byte, numSamples * URTP_SAMPLE_SIZE)
-
-    mp3Handle = openMp3File(dirName)
-    if mp3Handle != nil {
-        mp3Writer, _ = createMp3Writer(&mp3Audio)
-        if mp3Writer != nil {
-            log.Printf("Encoding %d byte(s) of silence into \"%s\" at offset %6.3f...\n", len(silencePcm), mp3Handle.Name(), float64(offset) / float64(time.Second))
-            err = writeTag(mp3Handle, offset)
-            if err == nil {
-                _, err = mp3Writer.Write(silencePcm)
-                if err == nil {
-                    _, err = mp3Audio.WriteTo(mp3Handle)
-                    if err != nil {
-                        log.Printf("There was an error writing to \"%s\" (%s).\n", mp3Handle.Name(), err.Error())
-                    }
-                    mp3Handle.Close()
-                    log.Printf("Closed MP3 silence file.\n")
-                } else {
-                    log.Printf("Unable to encode silence into MP3 file.\n")
-                }
-            }
-        } else {
-            log.Printf("Unable to create MP3 silence writer.\n")
-        }
-    }
-
-    return mp3Handle, err
-}
-
 // Write the ID3 tag to the start of an MP3 segment file indicating
 // its time offset from the previous segment file
 func writeTag(mp3Handle *os.File, offset time.Duration) error {
@@ -328,6 +293,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
     var mp3SamplesToEncode int
     var samplesEncoded int
     var mp3Offset time.Duration
+    var next *list.Element
     var channel = make(chan interface{})
     processTicker := time.NewTicker(time.Duration(BLOCK_DURATION_MS) * time.Millisecond)
 
@@ -361,7 +327,10 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
             // Go through the list of newly arrived datagrams, processing them and moving
             // them to the processed list
             thingProcessed := false
-            for newElement := newDatagramList.Front(); newElement != nil; newElement = newElement.Next() {
+            for newElement := newDatagramList.Front(); newElement != nil; newElement = next {
+                next = newElement.Next(); // Get the next value for the following iteration
+                                          // as a Remove() would cause newElement.next()
+                                          // to return nil
                 processDatagram(newElement.Value.(*UrtpDatagram), processedDatagramList)
                 //log.Printf("%d byte(s) in the outgoing audio buffer.\n", pcmAudio.Len())
                 //log.Printf("Moving datagram from the new list to the processed list...\n")
@@ -389,8 +358,9 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string) {
             if mp3SamplesToEncode <= 0 {
                 if mp3Handle != nil {
                     mp3Duration = time.Duration(samplesEncoded * 1000000 / SAMPLING_FREQUENCY) * time.Microsecond
-                    log.Printf("Writing %d millisecond(s) of MP3 audio (representing %d samples) to \"%s\" at offset %6.3f.\n",
-                               mp3Duration / time.Millisecond, samplesEncoded, mp3Handle.Name(), float64(mp3Offset) / float64(time.Second))
+                    log.Printf("Writing %d millisecond(s) of MP3 audio (%d samples) to \"%s\" at offset %6.3f (PCM buffer is %6.3f s, MP3 buffer is %d byte(s), URTP list is %d deep).\n",
+                               mp3Duration / time.Millisecond, samplesEncoded, mp3Handle.Name(), float64(mp3Offset) / float64(time.Second),
+                               float64(pcmAudio.Len() / URTP_SAMPLE_SIZE * 1000) / float64(SAMPLING_FREQUENCY) / float64(1000), mp3Audio.Len(), newDatagramList.Len())
                     err := writeTag(mp3Handle, mp3Offset)
                     if err == nil {
                         _, err = mp3Audio.WriteTo(mp3Handle)
