@@ -1,0 +1,79 @@
+<!DOCTYPE html PUBLIC "-//Netscape Comm. Corp.//DTD HTML//EN">
+<html>
+<script src="hls.js/dist/hls.js"></script>
+
+<head><meta http-equiv="content-type" content="text/html; charset=UTF-8"></head>
+<body>
+<style>
+.btn {
+    height: 350px;
+    width: 600px;
+    background-image:url(chuff_me_up.jpg);
+    background-repeat:no-repeat;
+}
+</style>
+
+<video id="video"></video>
+<button class="btn" id="play" hidden />
+<script>
+'use strict';
+var video = document.getElementById('video');
+var playButton = document.getElementById('play');
+
+function startPlaying() {
+    // For mobile browsers the start of playing has to
+    // be performed by a user action otherwise it will
+    // be ignored
+    playButton.addEventListener('click', function() {
+        video.play();
+        video.muted = false;
+        video.volume = 1;
+    });
+    playButton.hidden = false;
+}
+
+if (Hls.isSupported()) {
+    var config = {
+      debug: true,
+      liveSyncDurationCount: 1,
+      liveMaxLatencyDurationCount: 3
+    };
+
+    var hls = new Hls(config);
+    
+    //hls.on(Hls.Events.ERROR, function (event, data) {
+    //  alert("HLS error: \n" + JSON.stringify(data, null, 4));
+    //});
+
+    hls.loadSource('chuffs.m3u8');
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, startPlaying);
+    hls.on(Hls.Events.ERROR, function (event, data) {
+        if (data.fatal) {
+            switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                    // try to recover network error
+                    console.log("fatal network error, trying to recover");
+                    hls.startLoad();
+                break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                    console.log("fatal media error, trying to recover");
+                    hls.recoverMediaError();
+                break;
+                default:
+                    console.log("unhandled error (" + data.type + ")");
+                break;
+            }
+        }
+    });
+}
+// hls.js is not supported on platforms that do not have Media Source Extensions (MSE) enabled.
+// When the browser has built-in HLS support (check using `canPlayType`), we can provide an HLS manifest (i.e. .m3u8 URL) directly to the video element through the `src` property.
+// This is using the built-in support of the plain video element, without using hls.js.
+else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = 'chuffs.m3u8';
+    video.addEventListener('loadedmetadata', startPlaying);
+}
+</script>
+</body>
+</html>
