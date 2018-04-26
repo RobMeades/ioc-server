@@ -43,6 +43,10 @@ type Mp3AudioFile struct {
     removable bool
 }
 
+// Indication that we should reset the stream
+type Reset struct {
+}
+
 //--------------------------------------------------------------------
 // Constants
 //--------------------------------------------------------------------
@@ -206,34 +210,17 @@ func streamHandler(out http.ResponseWriter, in *http.Request, playlist *[]byte, 
     stopCache(out)
 }
 
-// Empty the MP3 file list, deleting the files as it goes
-func clearMp3FileList(mp3Dir string) {
-    log.Printf("Clearing MP3 file list...\n")
-    for newElement := newDatagramList.Front(); newElement != nil; newElement = newElement.Next() {
-        filePath := mp3Dir + string(os.PathSeparator) + newElement.Value.(*Mp3AudioFile).fileName
-        log.Printf("Deleting file \"%s\"...\n", filePath)
-        err:= os.Remove(filePath)
-        if err != nil {
-            log.Printf("Unable to delete \"%s\".\n", filePath)
-        }
-        newDatagramList.Remove(newElement)
-    }
-}
-
 // Start HTTP server for streaming output; this function should never return
-func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uint,
-                     oOSDir string, oosTimeSeconds uint) {
+func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uint) {
     var channel = make(chan interface{})
     var err error
     var mp3Dir string
     var mediaSequenceNumber int
-    var lastElementLoopRun time.Time
     var mp3UsableAge time.Duration = time.Second * time.Duration(playlistLengthSeconds)
     var mp3RemovableAge time.Duration = mp3UsableAge * 2
-    var oosAge time.Duration = time.Second * time.Duration(oosTimeSeconds)
-    var next *list.Element
     var playlist []byte
     var playlistLocker sync.Mutex
+    var mp3FileListLocker sync.Mutex
 
     streamTicker := time.NewTicker(time.Millisecond * 100)
     mux := http.NewServeMux()
@@ -258,21 +245,23 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
         for _ = range streamTicker.C {
             // Go through the file list and mark old files as unusable, then removable,
             // and attempt to delete removable files as we go
+            mp3FileListLocker.Lock()
+            var next *list.Element
             for newElement := mp3FileList.Front(); newElement != nil; newElement = next {
                 next = newElement.Next(); // Get the next value for the following iteration
                                           // as a Remove() would cause newElement.next()
                                           // to return nil
-                lastElementLoopRun = time.Now()
                 if (newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > mp3UsableAge) {
                     newElement.Value.(*Mp3AudioFile).usable = false;
                     mediaSequenceNumber++;
                     log.Printf ("MP3 file \"%s\", received at %s, no longer usable (time now is %s).\n",
                                 newElement.Value.(*Mp3AudioFile).fileName, newElement.Value.(*Mp3AudioFile).timestamp.String(),
                                 time.Now().String())
-                    bufferLength, _ := makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
+                    buffered, _ := makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
                     // Let the processing channel know of our buffer depth
                     outputBufferState := new(OutputBufferState)
-                    outputBufferState.Buffered = bufferLength
+                    outputBufferState.Buffered = buffered
+                    outputBufferState.BufferSize = mp3UsableAge;
                     ProcessDatagramsChannel <- outputBufferState
                 }
                 if (!newElement.Value.(*Mp3AudioFile).usable) && (time.Now().Sub(newElement.Value.(*Mp3AudioFile).timestamp) > mp3RemovableAge) {
@@ -289,6 +278,7 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
                     }
                 }
             }
+            mp3FileListLocker.Unlock()
         }
     }()
 
@@ -303,9 +293,29 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
                     mp3FileList.PushBack(message)
                     makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
                 }
+                case *Reset:
+                {
+                    log.Printf("Resetting the stream.\n")
+                    // Remove all the files
+                    mp3FileListLocker.Lock()
+                    var next *list.Element
+                    for newElement := mp3FileList.Front(); newElement != nil; newElement = next {
+                        next = newElement.Next(); // Get the next value for the following iteration
+                                                  // as a Remove() would cause newElement.next()
+                                                  // to return nil
+                        filePath := mp3Dir + string(os.PathSeparator) + newElement.Value.(*Mp3AudioFile).fileName
+                        if os.Remove(filePath) == nil {
+                            log.Printf ("MP3 file \"%s\" successfully deleted and will be removed from the list.\n", filePath)
+                            mp3FileList.Remove(newElement)
+                        }
+                    }
+                    mp3FileListLocker.Unlock()
+                    mediaSequenceNumber = 0;
+                    playlist = nil
+                    makePlaylist(&playlist, &playlistLocker, mediaSequenceNumber, playlistPath)
+                }
             }
         }
-        clearMp3FileList(mp3Dir)
         fmt.Printf("HTTP streaming channel closed, stopping.\n")
     }()
 
@@ -313,11 +323,7 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
     mux.HandleFunc("/", func(out http.ResponseWriter, in *http.Request) {
         if !filterCrossDomainRequest(out, in) {
             addCrossDomainToResponse(out)
-            if ((time.Now().Sub(lastElementLoopRun) > oosAge) && (oOSDir != "")) {
-                homeHandler(out, in, oOSDir)
-            } else {
-                homeHandler(out, in, mp3Dir)
-            }
+            homeHandler(out, in, mp3Dir)
         }
     })
     mux.HandleFunc(mp3Dir + "/", func(out http.ResponseWriter, in *http.Request) {
@@ -326,14 +332,6 @@ func operateAudioOut(port string, playlistPath string, playlistLengthSeconds uin
             streamHandler(out, in, &playlist, &playlistLocker)
         }
     })
-    if oOSDir != "" {
-        mux.HandleFunc(oOSDir + "/", func(out http.ResponseWriter, in *http.Request) {
-            if !filterCrossDomainRequest(out, in) {
-                addCrossDomainToResponse(out)
-                streamHandler(out, in, nil, nil)
-            }
-        })
-    }
 
     fmt.Printf("Starting HTTP server for Chuff requests on port %s.\n", port)
 

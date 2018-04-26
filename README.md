@@ -191,18 +191,16 @@ cp ~/libmp3lame/include/lame.h ~/gocode/src/github.com/RobMeades/ioc-server/lame
 ## Usage
 To run the code, do something like:
 
-`~/gocode/bin/ioc-server 1234 5678 ~/chuffs/live/chuffs -c -t -p 4 -o ~/chuffs/oos -s 300 -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
+`~/gocode/bin/ioc-server 1234 5678 ~/chuffs/live/chuffs -t -p 7 -o 300 -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
 
 ...where:
 
 - `1234` is the port number that `ioc-server` should receive packets on,
 - `5678` is the port number on which the `ioc-server` should listen for HTTP connections,
 - `~/chuffs/live/chuffs` is the path to the live playlists file that the `ioc-server` will create (i.e. in this case `chuffs.m3u8` in the `~/chuffs/live` directory),
-- `-c` indicates that old segments files should be deleted from the live playlists directory at start-up,
 - `-t` indicates that a TCP connection is expected (otherwise UDP packets),
-- `-p` indicates the maximum length of the playlist to store in seconds (defaults to 4),
-- `-o ~/chuffs/oos` optionally gives the directory containing HTML and, if required, in the same directory, static playlist/audio files, to use when there is no live audio to stream (you must create these files yourself),
-- `-s` indicates the number of seconds of inactivity after which to use the out of service HTML (only valid if `-o` is specified, defaults to 300),
+- `-p` indicates the maximum length of the playlist to store in seconds (defaults to 7),
+- `-o` the number of seconds of inactivity after which to assume that we are out of service and reset the stream (defaults to 300),
 - `-r ~/chuffs/audio.pcm` is the (optional) raw 16-bit PCM output file,
 - `-l ~/chuffs/ioc-server.log` will contain the (optional) file for log output from `ioc-server`.
 
@@ -215,7 +213,7 @@ Description=IoC server
 After=network-online.target
 
 [Service]
-ExecStart=/home/username/gocode/bin/ioc-server 1234 5678 /home/username/chuffs/live/chuffs -c -t -o /home/username/chuffs/oos
+ExecStart=/home/username/gocode/bin/ioc-server 1234 5678 /home/username/chuffs/live/chuffs -t
 Restart=on-failure
 RestartSec=3
 
