@@ -188,6 +188,9 @@ cp ~/libmp3lame/include/lame.h ~/gocode/src/github.com/RobMeades/ioc-server/lame
 
 `go get -u github.com/RobMeades/ioc-server`
 
+## Sample HTML Files
+Some simple sample HTML files are included in the `html` directory of this repo.  Copy these files to your chosen live playlists directory (e.g. `~/chuffs/live` in the example usage below) so that the `ioc-server` can serve them to the user.  These files are tested to work on Chrome, Firefox and Safari desktop and mobile browsers.
+
 ## Usage
 To run the code, do something like:
 
