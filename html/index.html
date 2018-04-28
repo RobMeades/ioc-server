@@ -1,20 +1,25 @@
 <!DOCTYPE html PUBLIC "-//Netscape Comm. Corp.//DTD HTML//EN">
 <html>
 <script src="hls.js/dist/hls.js"></script>
-
 <head><meta http-equiv="content-type" content="text/html; charset=UTF-8"></head>
 <body>
 <style>
-.btn {
+.btnDefault {
     height: 350px;
     width: 600px;
     background-image:url(chuff_me_up.jpg);
     background-repeat:no-repeat;
 }
+.btnPlaying {
+    height: 350px;
+    width: 600px;
+    background-image:url(chuffed.jpg);
+    background-repeat:no-repeat;
+}
 </style>
 
 <video id="video"></video>
-<button class="btn" id="play" hidden />
+<button class="btnDefault" id="play" hidden />
 <script>
 'use strict';
 var video = document.getElementById('video');
@@ -28,6 +33,8 @@ function startPlaying() {
         video.play();
         video.muted = false;
         video.volume = 1;
+        playButton.classList.add('btnPlaying');
+        playButton.classList.remove('btn');
     });
     playButton.hidden = false;
 }
