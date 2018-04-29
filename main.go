@@ -52,7 +52,8 @@ var opts struct {
         PlaylistPath string `positional-arg-name:"playlistpath" description:"path to the live playlist file (any file extension will be replaced with .m3u8); the playlist file will be created by this program and the audio files will be stored in the same directory as the playlist file.  The HTML file that serves the playlist file should be placed in this directory."`
     } `positional-args:"true" required:"yes"`
     UseTcp bool `short:"t" long:"tcp" description:"expect a TCP connection rather than a UDP connection"`
-    PlaylistLengthSeconds uint `default:"7" short:"p" long:"duration" description:"the maximum duration of the playlist in seconds"`
+    SegmentFileDurationMs uint `default:"1000" short:"s" long:"segment" description:"the duration of each HLS segment file in milliseconds"`
+    PlaylistLengthSeconds uint `default:"7" short:"p" long:"playlist" description:"the maximum duration of the HLS playlist in seconds"`
     OOSTimeSeconds uint `default:"300" short:"o" long:"oostime" description:"the number of seconds of inactivity after which to assume that we are out of service and reset the stream"`
     LogName string `short:"l" long:"logfile" description:"file for logging output (will be truncated if it already exists)"`
     RawPcmName string `short:"r" long:"rawpcmfile" description:"file for 16 bit PCM output (will be truncated if it already exists)"`
@@ -125,7 +126,7 @@ func main() {
         defer rawPcmHandle.Close()
 
         // Run the audio processing loop
-        go operateAudioProcessing(rawPcmHandle, mp3Dir, opts.OOSTimeSeconds)
+        go operateAudioProcessing(rawPcmHandle, mp3Dir, opts.OOSTimeSeconds, opts.SegmentFileDurationMs)
 
         // Run the server loop for incoming audio
         go operateAudioIn(opts.Required.In, opts.UseTcp)

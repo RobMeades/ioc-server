@@ -53,12 +53,6 @@ const MAX_GAP_FILL_MILLISECONDS int = 500
 // in MediaControlChannel to get to
 const MIN_OUTPUT_BUFFERED_AUDIO time.Duration = time.Millisecond * 1000
 
-// The amount of audio in each MP3 output file
-const MAX_MP3_FILE_DURATION time.Duration = time.Millisecond * 333
-
-// The number of samples represented by the MP3 file duration (calculated this way to allow millisecond durations)
-const MAX_MP3_FILE_SAMPLES int = int(MAX_MP3_FILE_DURATION / time.Millisecond) * SAMPLING_FREQUENCY / 1000
-
 // The track title to use
 const MP3_TITLE string = "Internet of Chuffs"
 
@@ -280,7 +274,7 @@ func writeTag(mp3Handle *os.File, offset time.Duration) error {
 }
 
 // Do the processing; this function should never return
-func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds uint) {
+func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds uint, segmentFileDurationMilliseconds uint) {
     var newDatagramList = list.New()
     var newDatagramListLocker sync.Mutex
     var processedDatagramList = list.New()
@@ -289,6 +283,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds
     var mp3SamplesPerFrame int
     var mp3Handle *os.File
     var mp3Duration time.Duration
+    var mp3FileSamples int = int(segmentFileDurationMilliseconds) * SAMPLING_FREQUENCY / 1000
     var maxOosAge time.Duration = time.Second * time.Duration(maxOosTimeSeconds)
     var oosAge time.Duration
     var mp3SamplesToEncode int
@@ -310,7 +305,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds
         os.Exit(-1)
     }
     // Encode an exact number of MP3 frames
-    mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame
+    mp3SamplesToEncode = mp3FileSamples / mp3SamplesPerFrame *  mp3SamplesPerFrame
 
     // Create the first MP3 output file
     mp3Handle = openMp3File(mp3Dir)
@@ -364,7 +359,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds
                     oosAge = time.Duration(0)
                     mp3Offset = time.Duration(0)
                     samplesEncoded = 0;
-                    mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame
+                    mp3SamplesToEncode = mp3FileSamples / mp3SamplesPerFrame *  mp3SamplesPerFrame
                     reset := new(Reset)
                     MediaControlChannel <- reset
                 }
@@ -407,7 +402,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds
                 mp3Offset += mp3Duration
                 mp3Handle = openMp3File(mp3Dir)
                 samplesEncoded = 0
-                mp3SamplesToEncode = MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame
+                mp3SamplesToEncode = mp3FileSamples / mp3SamplesPerFrame *  mp3SamplesPerFrame
             }
         }
     }()
@@ -435,7 +430,7 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds
                     if (message.Buffered < MIN_OUTPUT_BUFFERED_AUDIO) && (mp3Handle != nil) {
                         // Add a sample of silence if it has got too low so that HLS doesn't run dry (which would stop
                         // the browser requesting refills)
-                        buffer := make([]byte, (MAX_MP3_FILE_SAMPLES / mp3SamplesPerFrame *  mp3SamplesPerFrame) * URTP_SAMPLE_SIZE)
+                        buffer := make([]byte, (mp3FileSamples / mp3SamplesPerFrame *  mp3SamplesPerFrame) * URTP_SAMPLE_SIZE)
                         log.Printf("Adding %d samples (%d milliseconds) of silence into the PCM stream.\n",
                                     len(buffer) / URTP_SAMPLE_SIZE, (len(buffer) / URTP_SAMPLE_SIZE) * 1000 / SAMPLING_FREQUENCY)
                         pcmAudio.Write(buffer)

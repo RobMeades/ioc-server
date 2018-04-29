@@ -202,7 +202,8 @@ To run the code, do something like:
 - `5678` is the port number on which the `ioc-server` should listen for HTTP connections,
 - `~/chuffs/live/chuffs` is the path to the live playlists file that the `ioc-server` will create (i.e. in this case `chuffs.m3u8` in the `~/chuffs/live` directory),
 - `-t` indicates that a TCP connection is expected (otherwise UDP packets),
-- `-p` indicates the maximum length of the playlist to store in seconds (defaults to 7),
+- `-s` the duration of each HLS segment file in milliseconds (defaults to 1000),
+- `-p` indicates the maximum length of the HLS playlist in seconds (defaults to 7),
 - `-o` the number of seconds of inactivity after which to assume that we are out of service and reset the stream (defaults to 300),
 - `-r ~/chuffs/audio.pcm` is the (optional) raw 16-bit PCM output file,
 - `-l ~/chuffs/ioc-server.log` will contain the (optional) file for log output from `ioc-server`.
@@ -243,7 +244,9 @@ git clone https://github.com/video-dev/hls.js.git
 cd hls.js
 npm install
 ```
-I made one change: edit [this line](https://github.com/video-dev/hls.js/blob/master/src/controller/level-controller.js#L370) and replace `1000` with `newDetails.targetduration / 2`.  Actually, I just edited `dist/hls.js`, found the same line and replaced it there, since I didn't have the Webkit development environment installed.  Anyway, this removes the minimum manifest re-read period of 1 second, which allows the lowest possible audio latency.
+
+# LHLS
+Tomo at Openfresh, a live streaming service, has [modified HLS]( https://github.com/openfresh/hls.js) to add low-latency capability; the mod is described [here](https://medium.com/freshdevelopers/implementing-lhls-on-hls-js-4fc4558edff2). `ioc-server` does not use the `#EXT-X-FRESH-IS-COMING` tag, so it is questionable whether it is having any beneficial effect however, since this is going to be merged into [hls.js](https://github.com/video-dev/hls.js), I decided to use it in order to keep up with the game.
 
 # Credits
 This repo includes code imported from:
