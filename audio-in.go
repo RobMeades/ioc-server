@@ -82,7 +82,6 @@ const IP_HEADER_OVERHEAD int = 40
 const (
     PCM_SIGNED_16_BIT = 0
     UNICAM_COMPRESSED_8_BIT = 1
-    UNICAM_COMPRESSED_10_BIT = 2
     MAX_NUM_AUDIO_CODING_SCHEMES = iota
 )
 
@@ -125,7 +124,7 @@ func decodePcm(audioDataPcm []byte) *[]int16 {
     return &audio
 }
 
-// Decode UNICAM_COMPRESSED_x_BIT_16000_HZ data from a datagram
+// Decode UNICAM_COMPRESSED_8_BIT_16000_HZ data from a datagram
 // For details of the format, see the client code (ioc-client)
 func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
     var numBlocks int
@@ -136,7 +135,6 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
     var peakShift byte
     var sample int16
     var sourceIndex int
-    var compressedSampleBitShift uint = 0
 
     // Work out how much audio data is present
     for x := 0; x < len(audioDataUnicam) * 8; x += SAMPLES_PER_UNICAM_BLOCK * sampleSizeBits + UNICAM_CODED_SHIFT_SIZE_BITS {
@@ -152,35 +150,18 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
     for blockCount < numBlocks {
         // Get the compressed values
         for x := 0; x < SAMPLES_PER_UNICAM_BLOCK; x++ {
-            if sampleSizeBits != 8 {
-                // Have to juggle bits to unpack 10-bit samples
-                // uint(0xFF) here to avoid sign extension, not sure if it's required
-                sample = int16(((audioDataUnicam[sourceIndex]) & byte((uint(0xFF) >> compressedSampleBitShift)))) << (compressedSampleBitShift + (uint(sampleSizeBits) - 8))
-                //log.Printf("UNICAM block %d:%02d, partial unpacked value %d (0x%x), from initial input value 0x%x.\n", blockCount, x, sample, sample, audioDataUnicam[sourceIndex])
-                sourceIndex++
-                sample |= int16(audioDataUnicam[sourceIndex] >> (8 - (compressedSampleBitShift + uint(sampleSizeBits) - 8)))
-                audio[blockOffset + x] = sample
-                //log.Printf("UNICAM block %d:%02d, unpacked value %d (0x%x) with a bit of the next input value 0x%x.\n", blockCount, x, sample, sample, audioDataUnicam[sourceIndex])
-                compressedSampleBitShift += uint(sampleSizeBits) - 8;
-                if (compressedSampleBitShift >= 8) {
-                    compressedSampleBitShift = 0;
-                    sourceIndex++
-                }
-            } else {
-                // Do it the easy way for 8 bit compression
-                audio[blockOffset + x] = int16(audioDataUnicam[sourceIndex])
-                sourceIndex++
-            }
+            audio[blockOffset + x] = int16(audioDataUnicam[sourceIndex])
+            sourceIndex++
         }
 
         // Get the shift value
-        if (blockCount % 2 == 0) {
+        if ((blockCount & 1) == 0) {
             // Even block
             shiftValues = audioDataUnicam[sourceIndex]
             sourceIndex++
-            shift = shiftValues >> 4
-        } else {
             shift = shiftValues & 0x0F
+        } else {
+            shift = shiftValues >> 4
         }
 
         if shift > peakShift {
@@ -238,9 +219,6 @@ func handleUrtpDatagram(packet []byte) []byte {
                 case UNICAM_COMPRESSED_8_BIT:
                     //log.Printf("  audio coding:     UNICAM_COMPRESSED_8_BIT.\n")
                     urtpDatagram.Audio = decodeUnicam(packet[URTP_HEADER_SIZE:], 8)
-                case UNICAM_COMPRESSED_10_BIT:
-                    //log.Printf("  audio coding:     UNICAM_COMPRESSED_10_BIT.\n")
-                    urtpDatagram.Audio = decodeUnicam(packet[URTP_HEADER_SIZE:], 10)
                 default:
                     //log.Printf("  audio coding:     !unknown!\n")
             }
@@ -511,11 +489,7 @@ func tcpServer(port string) {
 }
 
 // Run the server that receives the audio of Chuffs; this function should never return
-func operateAudioIn(port string, useTCP bool) {
-    if useTCP {
-        go udpServer(port)
-        tcpServer(port)
-    } else {
-        udpServer(port)
-    }
+func operateAudioIn(port string) {
+    go udpServer(port)
+    tcpServer(port)
 }

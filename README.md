@@ -194,14 +194,13 @@ Some simple sample HTML files are included in the `html` directory of this repo.
 ## Usage
 To run the code, do something like:
 
-`~/gocode/bin/ioc-server 1234 5678 ~/chuffs/live/chuffs -t -p 7 -o 300 -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
+`~/gocode/bin/ioc-server 1234 5678 ~/chuffs/live/chuffs -p 7 -o 300 -r ~/chuffs/audio.pcm -l ~/chuffs/ioc-server.log`
 
 ...where:
 
 - `1234` is the port number that `ioc-server` should receive packets on,
 - `5678` is the port number on which the `ioc-server` should listen for HTTP connections,
 - `~/chuffs/live/chuffs` is the path to the live playlists file that the `ioc-server` will create (i.e. in this case `chuffs.m3u8` in the `~/chuffs/live` directory),
-- `-t` indicates that a TCP connection is expected (otherwise UDP packets),
 - `-s` the duration of each HLS segment file in milliseconds (defaults to 1000),
 - `-p` indicates the maximum length of the HLS playlist in seconds (defaults to 7),
 - `-o` the number of seconds of inactivity after which to assume that we are out of service and reset the stream (defaults to 300),
@@ -217,7 +216,7 @@ Description=IoC server
 After=network-online.target
 
 [Service]
-ExecStart=/home/username/gocode/bin/ioc-server 1234 5678 /home/username/chuffs/live/chuffs -t
+ExecStart=/home/username/gocode/bin/ioc-server 1234 5678 /home/username/chuffs/live/chuffs
 Restart=on-failure
 RestartSec=3
 
@@ -246,7 +245,7 @@ npm install
 ```
 
 # LHLS
-Tomo at Openfresh, a live streaming service, has [modified HLS]( https://github.com/openfresh/hls.js) to add low-latency capability; the mod is described [here](https://medium.com/freshdevelopers/implementing-lhls-on-hls-js-4fc4558edff2). `ioc-server` does not use the `#EXT-X-FRESH-IS-COMING` tag, so it is questionable whether it is having any beneficial effect however, since this is going to be merged into [hls.js](https://github.com/video-dev/hls.js), I decided to use it in order to keep up with the game.
+Tomo at Openfresh, a live streaming service, has [modified HLS]( https://github.com/openfresh/hls.js) to add low-latency capability; the mod is described [here](https://medium.com/freshdevelopers/implementing-lhls-on-hls-js-4fc4558edff2). `ioc-server` does not use the `#EXT-X-FRESH-IS-COMING` tag, so I don't know if it is having any beneficial effect however, since this is going to be merged into [hls.js](https://github.com/video-dev/hls.js), I decided to use it in order to keep up with the game.
 
 # Credits
 This repo includes code imported from:

@@ -313,7 +313,6 @@ func operateAudioProcessing(pcmHandle *os.File, mp3Dir string, maxOosTimeSeconds
         fmt.Fprintf(os.Stderr, "Unable to create temporary file for MP3 output in directory \"%s\" (permissions?).\n", mp3Dir)
         os.Exit(-1)
     }
-    
 
     fmt.Printf("Audio processing channel created and now being serviced.\n")
 

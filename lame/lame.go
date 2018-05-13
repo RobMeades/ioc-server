@@ -141,6 +141,11 @@ func (e *Encoder) Quality() int {
 	return int(q)
 }
 
+// Default = 0 = lame chooses.  -1 = disabled 
+func (e *Encoder) LowPassFrequency(frequency int) {
+	C.lame_set_lowpassfreq(e.handle, C.int(frequency))
+}
+
 func (e *Encoder) InSamplerate() int {
 	sr := C.lame_get_in_samplerate(e.handle)
 	return int(sr)
