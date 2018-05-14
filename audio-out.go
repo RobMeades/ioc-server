@@ -115,7 +115,7 @@ func makePlaylist(playlist *[]byte, playlistLocker *sync.Mutex, mediaSequenceNum
     for newElement := mp3FileList.Front(); newElement != nil; newElement = newElement.Next() {
         if newElement.Value.(*Mp3AudioFile).usable {
             numSegments++
-//            fmt.Fprintf(&segmentData, "#EXT-X-FRESH-IS-COMING\r\n")
+            fmt.Fprintf(&segmentData, "#EXT-X-FRESH-IS-COMING\r\n")
             fmt.Fprintf(&segmentData, "#EXTINF:%f, %s\r\n", float32(newElement.Value.(*Mp3AudioFile).duration) / float32(time.Second),
                         newElement.Value.(*Mp3AudioFile).title)
             fmt.Fprintf(&segmentData, "%s\r\n", newElement.Value.(*Mp3AudioFile).fileName)
