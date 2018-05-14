@@ -133,8 +133,8 @@ func createMp3Writer(mp3Audio *bytes.Buffer) (*lame.LameWriter, int) {
         // the first MP3 header must appear within the
         // first 100 bytes of the file).  So don't do that.
         mp3Writer.Encoder.SetVBR(lame.VBR_OFF)
-        // The encode keeps 3 bits free in case of rapid gain
-        // changes; that loss can be recovered here
+        // The encode keeps 4 bits free in case of rapid gain
+        // changes; some of that loss can be recovered here
         mp3Writer.Encoder.SetScale(7)
         // Disabling the bit reservoir reduces quality
         // but allows consecutive MP3 files to be butted
