@@ -146,6 +146,11 @@ func (e *Encoder) LowPassFrequency(frequency int) {
 	C.lame_set_lowpassfreq(e.handle, C.int(frequency))
 }
 
+func (e *Encoder) SetScale(gain float32) int {
+	g := C.lame_set_scale(e.handle, C.float(gain))
+	return int(g)
+}
+
 func (e *Encoder) InSamplerate() int {
 	sr := C.lame_get_in_samplerate(e.handle)
 	return int(sr)

@@ -105,6 +105,9 @@ var tcpBuffer bytes.Buffer
 // The last time a timing datagram was sent
 var timingDatagramSent time.Time
 
+// Deemphasis filter required for unicam
+var deemphasis Fir
+
 //--------------------------------------------------------------------
 // Functions
 //--------------------------------------------------------------------
@@ -178,7 +181,11 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
                     sample |= (1 << y)
                 }
             }
-            audio[blockOffset + x] = sample << shift
+            
+            // Put the sample through the de-emphasis filter on the way into
+            // the audio slice
+            FirPut(&deemphasis, float32(sample << shift))
+            audio[blockOffset + x] = int16(FirGet(&deemphasis))
 
             //log.Printf("UNICAM block %d:%02d, compressed value %d (0x%x) becomes %d (0x%x).\n",
             //           blockCount, x, sample, sample, audio[blockOffset + x], audio[blockOffset + x])
@@ -490,6 +497,9 @@ func tcpServer(port string) {
 
 // Run the server that receives the audio of Chuffs; this function should never return
 func operateAudioIn(port string) {
+    // Initialise the deemphasis filter
+    FirInit(&deemphasis)
+
     go udpServer(port)
     tcpServer(port)
 }
