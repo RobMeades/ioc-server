@@ -108,6 +108,9 @@ var timingDatagramSent time.Time
 // Deemphasis filter required for unicam
 var deemphasis Fir
 
+// Notch filter to remove squeal from the Hologram Nova modem
+var desqueal DeSquealFir
+
 //--------------------------------------------------------------------
 // Functions
 //--------------------------------------------------------------------
@@ -182,10 +185,11 @@ func decodeUnicam(audioDataUnicam []byte, sampleSizeBits int) *[]int16 {
                 }
             }
             
-            // Put the sample through the de-emphasis filter on the way into
+            // Put the sample through the filters on the way into
             // the audio slice
             FirPut(&deemphasis, float32(sample << shift))
-            audio[blockOffset + x] = int16(FirGet(&deemphasis))
+            DeSquealFirPut(&desqueal, FirGet(&deemphasis))
+            audio[blockOffset + x] = int16(DeSquealFirGet(&desqueal))
 
             //log.Printf("UNICAM block %d:%02d, compressed value %d (0x%x) becomes %d (0x%x).\n",
             //           blockCount, x, sample, sample, audio[blockOffset + x], audio[blockOffset + x])
@@ -497,9 +501,10 @@ func tcpServer(port string) {
 
 // Run the server that receives the audio of Chuffs; this function should never return
 func operateAudioIn(port string) {
-    // Initialise the deemphasis filter
+    // Initialise the filters
     FirInit(&deemphasis)
-
+    DeSquealFirInit(&desqueal)
+    
     go udpServer(port)
     tcpServer(port)
 }
